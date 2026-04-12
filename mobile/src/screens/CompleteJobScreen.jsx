@@ -1,17 +1,20 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Alert, KeyboardAvoidingView, Platform
 } from 'react-native'
-import { createInvoice } from '../api/client'
+import { createInvoice, getJob } from '../api/client'
 
 const EMPTY_ITEM = () => ({ description: '', quantity: '1', unit_price: '' })
 
 export default function CompleteJobScreen({ route, navigation }) {
-  const { jobId, jobTitle, customerName } = route.params
+  const { jobId } = route.params
+  const [job, setJob] = useState(null)
   const [items, setItems] = useState([EMPTY_ITEM()])
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
+
+  useEffect(() => { getJob(jobId).then(setJob) }, [jobId])
 
   const updateItem = (index, field, value) => {
     setItems(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item))
@@ -84,8 +87,8 @@ export default function CompleteJobScreen({ route, navigation }) {
 
         {/* Job summary */}
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>{jobTitle}</Text>
-          <Text style={styles.summaryCustomer}>{customerName}</Text>
+          <Text style={styles.summaryTitle}>{job?.title ?? '—'}</Text>
+          <Text style={styles.summaryCustomer}>{job?.customer?.name ?? '—'}</Text>
           <View style={[styles.badge]}>
             <Text style={styles.badgeText}>Completed</Text>
           </View>

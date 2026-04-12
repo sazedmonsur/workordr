@@ -1,174 +1,170 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Alert
+  TouchableOpacity, ActivityIndicator, Alert, RefreshControl,
 } from 'react-native'
 import { getJob, updateJobStatus } from '../api/client'
 
-const STATUS_COLORS = {
-  pending:     { bg: '#fef9c3', text: '#854d0e' },
-  scheduled:   { bg: '#dbeafe', text: '#1e40af' },
-  in_progress: { bg: '#f3e8ff', text: '#7e22ce' },
-  completed:   { bg: '#dcfce7', text: '#166534' },
-  cancelled:   { bg: '#fee2e2', text: '#991b1b' },
+const STATUS_COLOR = {
+  assigned:    '#dbeafe', en_route: '#fed7aa', in_progress: '#fef9c3',
+  completed:   '#dcfce7', invoiced: '#f3e8ff', paid: '#dcfce7',
+  cancelled:   '#fee2e2', scheduled: '#dbeafe', pending: '#f3f4f6',
 }
 
-function InfoRow({ label, value }) {
+// What button to show for each current status
+const NEXT_ACTION = {
+  assigned:    { label: 'Start Driving', nextStatus: 'en_route' },
+  scheduled:   { label: 'Start Driving', nextStatus: 'en_route' },
+  en_route:    { label: 'Arrived — Start Job', nextStatus: 'in_progress' },
+  in_progress: { label: 'Continue Working', nextStatus: null, action: 'continue' },
+}
+
+function Row({ label, value }) {
   if (!value) return null
   return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
+    <View style={s.row}>
+      <Text style={s.rowLabel}>{label}</Text>
+      <Text style={s.rowValue}>{value}</Text>
     </View>
   )
 }
 
 export default function JobDetailsScreen({ route, navigation }) {
   const { jobId } = route.params
-  const [job, setJob] = useState(null)
+  const [job, setJob]         = useState(null)
   const [loading, setLoading] = useState(true)
-  const [starting, setStarting] = useState(false)
+  const [acting, setActing]   = useState(false)
 
-  useEffect(() => {
-    getJob(jobId)
-      .then(setJob)
-      .finally(() => setLoading(false))
+  const load = useCallback(() => {
+    setLoading(true)
+    getJob(jobId).then(setJob).finally(() => setLoading(false))
   }, [jobId])
 
-  const handleStart = async () => {
-    Alert.alert('Start Job', 'Mark this job as In Progress?', [
+  useEffect(() => { load() }, [load])
+
+  const handleAction = async (nextStatus) => {
+    if (nextStatus === null) {
+      navigation.navigate('JobExecution', { jobId: job.id })
+      return
+    }
+    const confirmMsg = nextStatus === 'en_route'
+      ? 'Mark yourself as heading to this job?'
+      : 'Mark yourself as arrived and starting work?'
+    Alert.alert('Confirm', confirmMsg, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Start',
+        text: 'Yes',
         onPress: async () => {
-          setStarting(true)
+          setActing(true)
           try {
-            const updated = await updateJobStatus(jobId, 'in_progress')
-            setJob(updated)
-            navigation.navigate('JobExecution', { jobId })
+            await updateJobStatus(jobId, nextStatus)
+            load()
           } catch {
-            Alert.alert('Error', 'Could not update job status')
+            Alert.alert('Error', 'Status update failed')
           } finally {
-            setStarting(false)
+            setActing(false)
           }
-        }
-      }
+        },
+      },
     ])
   }
 
+  const fmtDt = (dt) => dt ? new Date(dt).toLocaleString([], {
+    weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  }) : null
+
   if (loading) return (
-    <View style={styles.center}>
-      <ActivityIndicator size="large" color="#1d4ed8" />
-    </View>
+    <View style={s.centered}><ActivityIndicator color="#3b82f6" size="large" /></View>
   )
-
   if (!job) return (
-    <View style={styles.center}>
-      <Text style={styles.errorText}>Job not found</Text>
-    </View>
+    <View style={s.centered}><Text style={s.errorText}>Job not found</Text></View>
   )
 
-  const colors = STATUS_COLORS[job.status] || STATUS_COLORS.pending
+  const statusBg = STATUS_COLOR[job.status] || '#f3f4f6'
+  const action = NEXT_ACTION[job.status]
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Header */}
-      <View style={styles.card}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>{job.title}</Text>
-          <View style={[styles.badge, { backgroundColor: colors.bg }]}>
-            <Text style={[styles.badgeText, { color: colors.text }]}>
-              {job.status.replace('_', ' ')}
+    <ScrollView
+      style={s.container}
+      refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
+    >
+      {/* Status banner */}
+      <View style={[s.banner, { backgroundColor: statusBg }]}>
+        <Text style={s.bannerStatus}>{job.status.replace(/_/g, ' ').toUpperCase()}</Text>
+        <Text style={s.bannerTitle}>{job.title}</Text>
+      </View>
+
+      {/* Details */}
+      <View style={s.section}>
+        <Row label="Customer"    value={job.customer?.name} />
+        <Row label="Service"     value={job.service?.name} />
+        <Row label="Address"     value={job.address || job.customer?.address} />
+        <Row label="Scheduled"   value={fmtDt(job.scheduled_at)} />
+        {job.scheduled_end_at && <Row label="Est. End" value={fmtDt(job.scheduled_end_at)} />}
+        <Row label="Description" value={job.description} />
+        {job.notes && (
+          <View style={s.notesBox}>
+            <Text style={s.notesLabel}>Notes</Text>
+            <Text style={s.notesText}>{job.notes}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Action buttons */}
+      <View style={s.actions}>
+        {action && (
+          <TouchableOpacity
+            style={[s.primaryBtn, acting && s.btnDisabled]}
+            onPress={() => handleAction(action.nextStatus)}
+            disabled={acting}
+          >
+            <Text style={s.primaryBtnText}>
+              {acting ? 'Updating...' : action.label}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {job.status === 'in_progress' && (
+          <TouchableOpacity
+            style={s.primaryBtn}
+            onPress={() => navigation.navigate('JobExecution', { jobId: job.id })}
+          >
+            <Text style={s.primaryBtnText}>Add Notes / Complete Job</Text>
+          </TouchableOpacity>
+        )}
+
+        {['completed', 'invoiced', 'paid'].includes(job.status) && (
+          <View style={s.doneBox}>
+            <Text style={s.doneText}>
+              {job.status === 'paid' ? 'Paid' : job.status === 'invoiced' ? 'Invoice Sent' : 'Job Completed'}
             </Text>
           </View>
-        </View>
-        {job.description && <Text style={styles.desc}>{job.description}</Text>}
+        )}
       </View>
-
-      {/* Customer */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Customer</Text>
-        <View style={styles.card}>
-          <InfoRow label="Name" value={job.customer?.name} />
-          <InfoRow label="Email" value={job.customer?.email} />
-          <InfoRow label="Phone" value={job.customer?.phone} />
-          <InfoRow label="Address" value={job.customer?.address} />
-        </View>
-      </View>
-
-      {/* Schedule */}
-      {job.schedule && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Schedule</Text>
-          <View style={styles.card}>
-            <InfoRow
-              label="Start"
-              value={new Date(job.schedule.scheduled_start).toLocaleString()}
-            />
-            <InfoRow
-              label="End"
-              value={new Date(job.schedule.scheduled_end).toLocaleString()}
-            />
-          </View>
-        </View>
-      )}
-
-      {/* Notes */}
-      {job.notes && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notes</Text>
-          <View style={styles.card}>
-            <Text style={styles.notes}>{job.notes}</Text>
-          </View>
-        </View>
-      )}
-
-      {/* Actions */}
-      {job.status === 'scheduled' && (
-        <TouchableOpacity
-          style={[styles.btn, styles.btnStart]}
-          onPress={handleStart}
-          disabled={starting}
-        >
-          <Text style={styles.btnText}>{starting ? 'Starting...' : 'Start Job'}</Text>
-        </TouchableOpacity>
-      )}
-
-      {job.status === 'in_progress' && (
-        <TouchableOpacity
-          style={[styles.btn, styles.btnContinue]}
-          onPress={() => navigation.navigate('JobExecution', { jobId })}
-        >
-          <Text style={styles.btnText}>Continue Job</Text>
-        </TouchableOpacity>
-      )}
     </ScrollView>
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  content: { padding: 16, paddingBottom: 40 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  errorText: { color: '#ef4444', fontSize: 15 },
-  card: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
-  },
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827', flex: 1, marginRight: 8 },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99 },
-  badgeText: { fontSize: 12, fontWeight: '600', textTransform: 'capitalize' },
-  desc: { fontSize: 14, color: '#6b7280', lineHeight: 20 },
-  section: { marginTop: 16 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f9fafb' },
-  infoLabel: { fontSize: 13, color: '#9ca3af', fontWeight: '500' },
-  infoValue: { fontSize: 13, color: '#111827', fontWeight: '500', flex: 1, textAlign: 'right' },
-  notes: { fontSize: 14, color: '#374151', lineHeight: 20 },
-  btn: { marginTop: 24, borderRadius: 12, padding: 16, alignItems: 'center' },
-  btnStart: { backgroundColor: '#7c3aed' },
-  btnContinue: { backgroundColor: '#2563eb' },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f9fafb' },
+  centered:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  errorText: { color: '#ef4444' },
+  banner:    { padding: 20, paddingTop: 24 },
+  bannerStatus: { fontSize: 11, fontWeight: '700', color: '#6b7280', letterSpacing: 1, marginBottom: 4 },
+  bannerTitle:  { fontSize: 20, fontWeight: '700', color: '#111827' },
+  section:   { backgroundColor: '#fff', margin: 12, borderRadius: 12, padding: 16,
+               shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  row:       { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8,
+               borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  rowLabel:  { fontSize: 13, color: '#9ca3af', fontWeight: '500' },
+  rowValue:  { fontSize: 13, color: '#111827', fontWeight: '500', flex: 1, textAlign: 'right' },
+  notesBox:  { marginTop: 8, padding: 10, backgroundColor: '#f9fafb', borderRadius: 8 },
+  notesLabel:{ fontSize: 11, color: '#9ca3af', fontWeight: '600', marginBottom: 4 },
+  notesText: { fontSize: 13, color: '#374151' },
+  actions:   { padding: 16, gap: 10 },
+  primaryBtn:{ backgroundColor: '#3b82f6', borderRadius: 12, padding: 15, alignItems: 'center' },
+  btnDisabled:{ opacity: 0.6 },
+  primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  doneBox:   { backgroundColor: '#dcfce7', borderRadius: 12, padding: 15, alignItems: 'center' },
+  doneText:  { color: '#15803d', fontWeight: '700', fontSize: 15 },
 })

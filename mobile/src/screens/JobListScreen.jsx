@@ -1,135 +1,179 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet, ActivityIndicator, RefreshControl, Alert
+  StyleSheet, ActivityIndicator, RefreshControl, SectionList,
 } from 'react-native'
-import { useFocusEffect } from '@react-navigation/native'
-import { getJobsByTechnician, getTechnicians } from '../api/client'
+import { getJobs } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 
-const STATUS_COLORS = {
-  pending:     { bg: '#fef9c3', text: '#854d0e' },
+const STATUS_COLOR = {
+  assigned:    { bg: '#dbeafe', text: '#1d4ed8' },
+  en_route:    { bg: '#fed7aa', text: '#c2410c' },
+  in_progress: { bg: '#fef9c3', text: '#a16207' },
+  completed:   { bg: '#dcfce7', text: '#15803d' },
+  invoiced:    { bg: '#f3e8ff', text: '#7e22ce' },
+  paid:        { bg: '#dcfce7', text: '#166534' },
   scheduled:   { bg: '#dbeafe', text: '#1e40af' },
-  in_progress: { bg: '#f3e8ff', text: '#7e22ce' },
-  completed:   { bg: '#dcfce7', text: '#166534' },
-  cancelled:   { bg: '#fee2e2', text: '#991b1b' },
+  requested:   { bg: '#f3f4f6', text: '#4b5563' },
+  pending:     { bg: '#f3f4f6', text: '#4b5563' },
+  cancelled:   { bg: '#fee2e2', text: '#b91c1c' },
 }
 
-// For MVP: use the first technician from the DB
-// In a real app this would come from auth
-export default function JobListScreen({ navigation }) {
-  const [jobs, setJobs] = useState([])
-  const [techId, setTechId] = useState(null)
-  const [techName, setTechName] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
+function fmtTime(dt) {
+  if (!dt) return null
+  return new Date(dt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
 
-  const loadData = async () => {
-    try {
-      const techs = await getTechnicians()
-      if (techs.length === 0) {
-        Alert.alert('No technicians', 'Please add a technician from the web app first.')
-        return
-      }
-      const tech = techs[0]
-      setTechId(tech.id)
-      setTechName(tech.name)
-      const myJobs = await getJobsByTechnician(tech.id)
-      setJobs(myJobs.filter(j => j.status !== 'cancelled'))
-    } catch (e) {
-      Alert.alert('Error', 'Could not connect to server. Check your API URL.')
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }
+function fmtDate(dt) {
+  if (!dt) return null
+  const d = new Date(dt)
+  const today = new Date()
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
+  if (d.toDateString() === today.toDateString()) return 'Today'
+  if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
+  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+}
 
-  useFocusEffect(useCallback(() => { loadData() }, []))
-
-  const onRefresh = () => { setRefreshing(true); loadData() }
-
-  const renderJob = ({ item }) => {
-    const colors = STATUS_COLORS[item.status] || STATUS_COLORS.pending
-    return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => navigation.navigate('JobDetails', { jobId: item.id })}
-        activeOpacity={0.7}
-      >
-        <View style={styles.cardHeader}>
-          <Text style={styles.jobTitle} numberOfLines={1}>{item.title}</Text>
-          <View style={[styles.badge, { backgroundColor: colors.bg }]}>
-            <Text style={[styles.badgeText, { color: colors.text }]}>
-              {item.status.replace('_', ' ')}
-            </Text>
-          </View>
+function JobCard({ job, onPress }) {
+  const sc = STATUS_COLOR[job.status] || STATUS_COLOR.pending
+  return (
+    <TouchableOpacity style={s.card} onPress={() => onPress(job)}>
+      <View style={s.cardTop}>
+        <View style={s.cardLeft}>
+          <Text style={s.jobTitle} numberOfLines={1}>{job.title}</Text>
+          <Text style={s.customer}>{job.customer?.name}</Text>
+          {job.service && <Text style={s.service}>{job.service.name}</Text>}
+          {job.address && <Text style={s.address} numberOfLines={1}>{job.address}</Text>}
         </View>
-        <Text style={styles.customerName}>{item.customer?.name}</Text>
-        {item.description && (
-          <Text style={styles.desc} numberOfLines={2}>{item.description}</Text>
-        )}
-        <Text style={styles.date}>
-          Created {new Date(item.created_at).toLocaleDateString()}
-        </Text>
-      </TouchableOpacity>
-    )
-  }
-
-  if (loading) return (
-    <View style={styles.center}>
-      <ActivityIndicator size="large" color="#1d4ed8" />
-    </View>
+        <View style={s.cardRight}>
+          <View style={[s.badge, { backgroundColor: sc.bg }]}>
+            <Text style={[s.badgeText, { color: sc.text }]}>{job.status.replace(/_/g, ' ')}</Text>
+          </View>
+          {job.scheduled_at && (
+            <Text style={s.time}>{fmtTime(job.scheduled_at)}</Text>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
   )
+}
+
+export default function JobListScreen({ navigation }) {
+  const { technician } = useAuth()
+  const [sections, setSections] = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [tab, setTab] = useState('today') // today | upcoming | all
+
+  const ACTIVE_STATUSES = ['assigned', 'en_route', 'in_progress', 'scheduled', 'requested', 'pending']
+
+  const load = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true)
+    else setLoading(true)
+    try {
+      const jobs = await getJobs({ technician_id: technician?.id })
+      const active = jobs.filter(j => !['cancelled', 'paid'].includes(j.status))
+
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
+
+      if (tab === 'today') {
+        const todayJobs = active.filter(j => {
+          if (!j.scheduled_at) return false
+          const d = new Date(j.scheduled_at)
+          return d >= today && d < tomorrow
+        })
+        // Also show active unscheduled jobs
+        const unscheduled = active.filter(j => !j.scheduled_at && ACTIVE_STATUSES.includes(j.status))
+        setSections([
+          { title: 'Today', data: todayJobs.sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at)) },
+          ...(unscheduled.length ? [{ title: 'Unscheduled', data: unscheduled }] : []),
+        ].filter(s => s.data.length > 0))
+      } else if (tab === 'upcoming') {
+        const upcoming = active.filter(j => j.scheduled_at && new Date(j.scheduled_at) >= tomorrow)
+        const grouped = {}
+        upcoming.forEach(j => {
+          const key = fmtDate(j.scheduled_at)
+          if (!grouped[key]) grouped[key] = []
+          grouped[key].push(j)
+        })
+        setSections(Object.entries(grouped).map(([title, data]) => ({
+          title,
+          data: data.sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at)),
+        })))
+      } else {
+        setSections([{ title: 'All Jobs', data: active }])
+      }
+    } catch {}
+    if (isRefresh) setRefreshing(false)
+    else setLoading(false)
+  }, [technician, tab])
+
+  useEffect(() => { load() }, [load])
+
+  const handlePress = (job) => navigation.navigate('JobDetail', { jobId: job.id })
 
   return (
-    <View style={styles.container}>
-      {techName ? (
-        <View style={styles.techBanner}>
-          <Text style={styles.techLabel}>Logged in as</Text>
-          <Text style={styles.techName}>{techName}</Text>
-        </View>
-      ) : null}
-      <FlatList
-        data={jobs}
-        keyExtractor={j => j.id}
-        renderItem={renderJob}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={jobs.length === 0 ? styles.emptyContainer : styles.list}
-        ListEmptyComponent={
-          <View style={styles.center}>
-            <Text style={styles.emptyText}>No jobs assigned to you</Text>
-            <Text style={styles.emptyHint}>Pull down to refresh</Text>
-          </View>
-        }
-      />
+    <View style={s.container}>
+      {/* Tabs */}
+      <View style={s.tabs}>
+        {[['today', 'Today'], ['upcoming', 'Upcoming'], ['all', 'All']].map(([key, label]) => (
+          <TouchableOpacity key={key} style={[s.tab, tab === key && s.tabActive]} onPress={() => setTab(key)}>
+            <Text style={[s.tabText, tab === key && s.tabTextActive]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {loading ? (
+        <ActivityIndicator color="#3b82f6" size="large" style={{ marginTop: 40 }} />
+      ) : (
+        <SectionList
+          sections={sections}
+          keyExtractor={item => item.id}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
+          renderSectionHeader={({ section }) => (
+            <View style={s.sectionHeader}>
+              <Text style={s.sectionTitle}>{section.title}</Text>
+              <Text style={s.sectionCount}>{section.data.length} job{section.data.length !== 1 ? 's' : ''}</Text>
+            </View>
+          )}
+          renderItem={({ item }) => <JobCard job={item} onPress={handlePress} />}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+          ListEmptyComponent={
+            <View style={s.empty}>
+              <Text style={s.emptyText}>No jobs for this view</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  techBanner: {
-    backgroundColor: '#eff6ff', paddingHorizontal: 16, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: '#dbeafe', flexDirection: 'row',
-    alignItems: 'center', gap: 6,
-  },
-  techLabel: { fontSize: 12, color: '#6b7280' },
-  techName: { fontSize: 13, fontWeight: '700', color: '#1d4ed8' },
-  list: { padding: 16, gap: 12 },
-  emptyContainer: { flex: 1 },
-  card: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
-    marginBottom: 12,
-  },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  jobTitle: { fontSize: 15, fontWeight: '700', color: '#111827', flex: 1, marginRight: 8 },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 },
-  badgeText: { fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
-  customerName: { fontSize: 13, color: '#2563eb', fontWeight: '500', marginBottom: 4 },
-  desc: { fontSize: 13, color: '#6b7280', lineHeight: 18, marginBottom: 6 },
-  date: { fontSize: 11, color: '#9ca3af' },
-  emptyText: { fontSize: 16, fontWeight: '600', color: '#374151', marginBottom: 4 },
-  emptyHint: { fontSize: 13, color: '#9ca3af' },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f9fafb' },
+  tabs:      { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  tab:       { flex: 1, paddingVertical: 12, alignItems: 'center' },
+  tabActive: { borderBottomWidth: 2, borderBottomColor: '#3b82f6' },
+  tabText:   { fontSize: 13, color: '#9ca3af', fontWeight: '500' },
+  tabTextActive: { color: '#3b82f6', fontWeight: '700' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                   paddingVertical: 8, paddingTop: 16 },
+  sectionTitle:  { fontSize: 12, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionCount:  { fontSize: 11, color: '#d1d5db' },
+  card:      { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 8,
+               shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  cardTop:   { flexDirection: 'row', gap: 10 },
+  cardLeft:  { flex: 1 },
+  cardRight: { alignItems: 'flex-end', gap: 4 },
+  jobTitle:  { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 2 },
+  customer:  { fontSize: 12, color: '#6b7280' },
+  service:   { fontSize: 11, color: '#3b82f6', marginTop: 2 },
+  address:   { fontSize: 11, color: '#9ca3af', marginTop: 2 },
+  badge:     { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
+  badgeText: { fontSize: 10, fontWeight: '600', textTransform: 'capitalize' },
+  time:      { fontSize: 12, color: '#6b7280', fontWeight: '500' },
+  empty:     { alignItems: 'center', paddingTop: 60 },
+  emptyText: { color: '#9ca3af', fontSize: 14 },
 })
