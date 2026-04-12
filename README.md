@@ -1,33 +1,21 @@
 # WorkOrdr
 
-Field Service Management MVP — manage the full job lifecycle from customer creation to payment collection.
+Field Service Management Platform — Phase 2.
 
-**Stack:** FastAPI · PostgreSQL · React · Tailwind · React Native · Stripe
+**Stack:** FastAPI · PostgreSQL · React · Tailwind · React Native · Expo · Stripe
 
 ---
 
 ## Prerequisites
 
-Make sure you have these installed before starting:
-
 - Python 3.11+
 - Node.js 18+
-- PostgreSQL (via [Homebrew](https://brew.sh) or [Docker](https://docker.com))
-- Expo Go app on your phone (for mobile)
+- Docker (for PostgreSQL)
+- Expo Go app on your phone
 
 ---
 
-## 1. Database Setup
-
-### Option A — Homebrew (recommended for Mac)
-
-```bash
-brew install postgresql@16
-brew services start postgresql@16
-createdb workordr
-```
-
-### Option B — Docker
+## 1. Database
 
 ```bash
 docker compose up -d
@@ -39,126 +27,136 @@ docker compose up -d
 
 ```bash
 cd backend
-
-# Create and activate virtual environment
 python3 -m venv venv
 source venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Set up environment variables
 cp .env.example .env
-nano .env
 ```
 
-Edit `.env` with your values:
+Edit `.env`:
 
 ```env
-# Homebrew Postgres (replace "yourname" with your Mac username)
-DATABASE_URL=postgresql://yourname@localhost:5432/workordr
-
-# Docker Postgres
 DATABASE_URL=postgresql://postgres:password@localhost:5432/workordr
-
-# Stripe test keys (get from stripe.com → Developers → API keys)
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_PUBLISHABLE_KEY=pk_test_...
 ```
 
-Start the server:
+Run migration (first time only, adds Phase 2 columns):
 
 ```bash
-uvicorn app.main:app --reload
+python migrate_v2.py
 ```
 
-Backend runs at: **http://localhost:8000**
-Swagger API docs: **http://localhost:8000/docs**
-
----
-
-## 3. Seed Sample Data
-
-In a new terminal (with venv active):
+Seed sample data:
 
 ```bash
-cd backend
-source venv/bin/activate
-python3 seed.py
+python seed_v2.py
 ```
 
 This creates:
-- 3 customers (Alice, Bob, Carol)
-- 2 technicians (Mike, Sarah)
-- 5 jobs (mix of statuses)
-- 3 schedules
+- 10 services (HVAC, Plumbing, Appliance, Cleaning, Electrical)
+- 5 technicians (Mike, Sarah, James, Priya, Carlos)
+- 5 customers
+- 8 jobs (mix of statuses)
+- Schedules, availability blocks, invoices
+
+Start server — **must use `--host 0.0.0.0`** for mobile app to connect:
+
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+- API: **http://localhost:8000**
+- Swagger docs: **http://localhost:8000/docs**
 
 ---
 
-## 4. Frontend
-
-In a new terminal:
+## 3. Frontend
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Set Stripe publishable key
-echo "VITE_STRIPE_PUBLISHABLE_KEY=pk_test_..." > .env
-
-# Start dev server
+echo "VITE_STRIPE_PK=pk_test_..." > .env
 npm run dev
 ```
 
-Frontend runs at: **http://localhost:5173**
+Runs at: **http://localhost:5173**
+
+| URL | Description |
+|-----|-------------|
+| `/dashboard` | Analytics overview |
+| `/dispatch` | Drag-and-drop dispatch board |
+| `/jobs` | Job management |
+| `/technicians` | Technician management |
+| `/services` | Service catalog |
+| `/invoices` | Invoices + payment |
+| `/notifications` | Notification log |
+| `/book` | Customer booking page (public) |
 
 ---
 
-## 5. Mobile App
+## 4. Mobile
 
 ```bash
 cd mobile
-
-# Install dependencies
 npm install
+```
 
-# Start Expo
+Update `src/api/client.js` — set your machine's LAN IP:
+
+```js
+const BASE_URL = 'http://YOUR_LAN_IP:8000'
+```
+
+Find your IP: `ifconfig | grep "inet " | grep -v 127.0.0.1`
+
+```bash
 npx expo start
 ```
 
-Then scan the QR code with **Expo Go** on your phone.
-
-> **Physical device?** Update `BASE_URL` in `mobile/src/api/client.js` from `localhost` to your Mac's local IP address (e.g. `192.168.1.100`).
+Scan the QR code with Expo Go.
 
 ---
 
-## Running Everything Together
+## Running Everything
 
-You need **3 terminal tabs** running simultaneously:
+3 terminals:
 
-| Tab | Command | URL |
-|-----|---------|-----|
-| 1 - Backend | `cd backend && source venv/bin/activate && uvicorn app.main:app --reload` | localhost:8000 |
-| 2 - Frontend | `cd frontend && npm run dev` | localhost:5173 |
-| 3 - Mobile | `cd mobile && npx expo start` | Expo QR code |
+| Tab | Command |
+|-----|---------|
+| Backend | `cd backend && source venv/bin/activate && uvicorn app.main:app --reload --host 0.0.0.0` |
+| Frontend | `cd frontend && npm run dev` |
+| Mobile | `cd mobile && npx expo start` |
 
 ---
 
 ## Full Workflow
 
 ```
-1.  [Web]    Customers page   → Create a customer
-2.  [Web]    Jobs page        → Create a job (link to customer)
-3.  [Web]    Dispatch page    → Schedule the job (pick technician + time)
-4.  [Mobile] Job List         → Technician sees assigned jobs
-5.  [Mobile] Job Details      → Tap "Start Job" → status: In Progress
-6.  [Mobile] Job Execution    → Add notes about the work
-7.  [Mobile] Complete Job     → Add line items (labor, parts) → Create Invoice
-8.  [Web]    Invoices page    → Click invoice → tap "Pay Now"
-9.  [Web]    Stripe checkout  → Use test card: 4242 4242 4242 4242
-10. [Web]    Dashboard        → See updated revenue and job stats
+ADMIN PORTAL
+1. Services page     → review/add service catalog
+2. Technicians page  → add technicians, assign services
+3. Jobs page         → create a job (pick customer + service)
+4. Dispatch Board    → drag job to technician lane → set time → schedule
+5. Dashboard         → monitor jobs today, revenue, workload
+
+TECHNICIAN MOBILE
+6. Login screen      → select your name
+7. My Jobs → Today   → see assigned jobs
+8. Tap job           → "Start Driving" → en_route
+9. Tap again         → "Arrived — Start Job" → in_progress
+10. Add Notes        → save work notes
+11. Complete Job     → add line items → Create Invoice
+
+ADMIN PORTAL (continued)
+12. Invoices page    → invoice appears → Pay Now (on-site)
+    OR customer gets payment link by email (when notifications are live)
+13. Dashboard        → revenue updates
+
+CUSTOMER BOOKING (public)
+14. /book            → pick service → pick time slot → enter details → submit
+15. /book/confirmed  → confirmation page
+16. /invoice/:id/pay → customer pays invoice online
 ```
 
 ---
@@ -166,10 +164,27 @@ You need **3 terminal tabs** running simultaneously:
 ## Stripe Test Card
 
 ```
-Card number:  4242 4242 4242 4242
-Expiry:       Any future date (e.g. 12/26)
-CVC:          Any 3 digits (e.g. 123)
+Number:  4242 4242 4242 4242
+Expiry:  Any future date
+CVC:     Any 3 digits
 ```
+
+---
+
+## Notifications
+
+Currently **mock** — logs to uvicorn terminal, no real email/SMS sent.
+
+To enable real notifications, implement `NotificationProvider` in:
+`backend/app/notifications/provider.py`
+
+Events fired automatically:
+- `booking_created` — when customer submits booking
+- `technician_assigned` — when job is scheduled
+- `invoice_generated` — when invoice is created
+- `payment_received` — when payment confirmed
+
+View all notification attempts at `/notifications` in the admin portal.
 
 ---
 
@@ -179,67 +194,130 @@ CVC:          Any 3 digits (e.g. 123)
 workordr/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py           # FastAPI entry point
-│   │   ├── database.py       # SQLAlchemy + session
-│   │   ├── models.py         # DB models
-│   │   ├── schemas.py        # Pydantic schemas
-│   │   └── routers/          # customers, jobs, schedules,
-│   │                         # invoices, payments, dashboard
-│   ├── seed.py               # Sample data
-│   ├── tests/test_api.py     # API tests
-│   └── requirements.txt
+│   │   ├── main.py
+│   │   ├── models.py
+│   │   ├── schemas.py
+│   │   ├── routers/
+│   │   │   ├── customers.py
+│   │   │   ├── technicians.py
+│   │   │   ├── jobs.py
+│   │   │   ├── schedules.py
+│   │   │   ├── services.py
+│   │   │   ├── bookings.py
+│   │   │   ├── availability.py
+│   │   │   ├── invoices.py
+│   │   │   ├── payments.py
+│   │   │   ├── analytics.py
+│   │   │   ├── notifications_log.py
+│   │   │   └── dashboard.py
+│   │   └── notifications/
+│   │       ├── provider.py
+│   │       └── events.py
+│   ├── migrate_v2.py
+│   ├── seed_v2.py
+│   └── tests/
+│       ├── test_api.py
+│       └── test_phase2.py
 │
 ├── frontend/
 │   └── src/
-│       ├── pages/            # Dashboard, Customers, Jobs,
-│       │                     # DispatchBoard, Invoices
-│       ├── components/       # Layout, StatusBadge
-│       └── api/client.js     # All API calls
+│       ├── pages/
+│       │   ├── Dashboard.jsx
+│       │   ├── DispatchBoard.jsx
+│       │   ├── Jobs.jsx
+│       │   ├── Technicians.jsx
+│       │   ├── Services.jsx
+│       │   ├── Invoices.jsx
+│       │   ├── Customers.jsx
+│       │   ├── NotificationsLog.jsx
+│       │   ├── BookingPage.jsx
+│       │   ├── BookingConfirmation.jsx
+│       │   └── InvoiceView.jsx
+│       ├── components/
+│       │   ├── Layout.jsx
+│       │   └── StatusBadge.jsx
+│       └── api/client.js
 │
 ├── mobile/
 │   └── src/
-│       ├── screens/          # JobList, JobDetails,
-│       │                     # JobExecution, CompleteJob
-│       └── navigation/       # React Navigation stack
+│       ├── screens/
+│       │   ├── LoginScreen.jsx
+│       │   ├── JobListScreen.jsx
+│       │   ├── JobDetailsScreen.jsx
+│       │   ├── JobExecutionScreen.jsx
+│       │   ├── CompleteJobScreen.jsx
+│       │   └── AvailabilityScreen.jsx
+│       ├── navigation/AppNavigator.jsx
+│       ├── context/AuthContext.jsx
+│       └── api/client.js
 │
-└── docker-compose.yml        # PostgreSQL only
+└── docker-compose.yml
 ```
 
 ---
 
-## API Endpoints
+## API Reference
 
+### Core
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | /health | Health check |
-| POST | /customers | Create customer |
-| GET | /customers | List customers |
-| POST | /technicians | Create technician |
-| GET | /technicians | List technicians |
-| POST | /jobs | Create job |
-| GET | /jobs | List jobs (filter: status, technician_id) |
-| GET | /jobs/{id} | Get job detail |
-| PATCH | /jobs/{id}/status | Update job status |
-| POST | /schedules | Schedule a job |
-| GET | /schedules | List schedules (filter: date) |
-| POST | /invoices | Create invoice from completed job |
-| GET | /invoices | List invoices |
-| GET | /invoices/{id} | Get invoice detail |
-| POST | /payments/create-intent | Create Stripe PaymentIntent |
-| POST | /payments/confirm | Confirm payment, mark invoice paid |
-| GET | /dashboard/stats | Aggregated stats |
+| GET | /dashboard/stats | Basic stats |
+| GET | /admin/analytics/overview | Full analytics |
+
+### Customers & Technicians
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST/GET | /customers | Create / list |
+| POST/GET | /technicians | Create / list |
+| PUT | /technicians/{id} | Update |
+| POST/DELETE | /technicians/{id}/services/{sid} | Assign service |
+
+### Services
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET/POST | /services | List / create |
+| PUT | /services/{id} | Update / deactivate |
+
+### Jobs
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST/GET | /jobs | Create / list |
+| PUT | /jobs/{id} | Update |
+| PATCH | /jobs/{id}/status | Update status |
+| POST | /jobs/{id}/complete | Complete job |
+| POST | /jobs/{id}/notes | Add notes |
+| GET | /jobs/{id}/history | Status history |
+| GET | /jobs/admin/dispatch | Dispatch board data |
+
+### Scheduling & Availability
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST/GET | /schedules | Schedule job / list |
+| GET | /availability/search | Available slots |
+| POST/GET | /availability/{tech_id} | Add / list blocks |
+| DELETE | /availability/slot/{id} | Remove block |
+
+### Bookings, Invoices, Payments
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | /bookings | Customer booking |
+| POST/GET | /invoices | Create / list |
+| GET | /invoices/{id} | Invoice detail |
+| POST | /payments/create-intent | Stripe intent |
+| POST | /payments/confirm | Confirm payment |
+
+### Notifications
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /admin/notifications | View log |
 
 ---
 
-## Run Tests
+## Tests
 
 ```bash
 cd backend
-source venv/bin/activate
-
-# Create a test database first
 createdb workordr_test
-
-# Run tests
 pytest tests/ -v
 ```
