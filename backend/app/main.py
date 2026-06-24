@@ -5,7 +5,7 @@ from app.routers import (
     customers, technicians, jobs, schedules,
     invoices, payments, dashboard,
     services, bookings, availability,
-    analytics, notifications_log,
+    analytics, notifications_log, admin_demo,
 )
 
 # Create all tables on startup (idempotent — safe to call each time)
@@ -40,6 +40,7 @@ app.include_router(bookings.router)
 app.include_router(availability.router)
 app.include_router(analytics.router)
 app.include_router(notifications_log.router)
+app.include_router(admin_demo.router)
 
 
 @app.get("/health")

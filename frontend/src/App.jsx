@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
+import PasswordGate from './components/PasswordGate'
 import Dashboard from './pages/Dashboard'
 import Customers from './pages/Customers'
 import Jobs from './pages/Jobs'
@@ -22,7 +23,7 @@ export default function App() {
         <Route path="/invoice/:id/pay" element={<InvoiceView />} />
 
         {/* Admin portal */}
-        <Route path="/" element={<Layout />}>
+        <Route path="/" element={<PasswordGate><Layout /></PasswordGate>}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="customers" element={<Customers />} />
