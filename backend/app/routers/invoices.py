@@ -103,3 +103,25 @@ def get_invoice(invoice_id: uuid.UUID, db: Session = Depends(get_db)):
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return invoice
+
+
+@router.patch("/{invoice_id}/mark-paid", response_model=InvoiceOut)
+def mark_invoice_paid(invoice_id: uuid.UUID, payload: dict, db: Session = Depends(get_db)):
+    """Mark an invoice as paid via cash, e-transfer, or other offline method."""
+    invoice = db.query(Invoice).options(joinedload(Invoice.job)).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if invoice.status == "paid":
+        raise HTTPException(status_code=400, detail="Invoice already paid")
+    invoice.status = "paid"
+    if invoice.job and invoice.job.status != "paid":
+        db.add(JobStatusHistory(
+            job_id=invoice.job.id,
+            old_status=invoice.job.status,
+            new_status="paid",
+            changed_by="admin",
+            notes=payload.get("method", "offline payment"),
+        ))
+        invoice.job.status = "paid"
+    db.commit()
+    return _load_invoice(db, invoice_id)

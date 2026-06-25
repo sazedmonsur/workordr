@@ -57,6 +57,7 @@ export const createBooking = (data) => api.post('/bookings', data).then(r => r.d
 export const getInvoices = () => api.get('/invoices').then(r => r.data)
 export const getInvoice = (id) => api.get(`/invoices/${id}`).then(r => r.data)
 export const createInvoice = (data) => api.post('/invoices', data).then(r => r.data)
+export const markInvoicePaid = (id, method) => api.patch(`/invoices/${id}/mark-paid`, { method }).then(r => r.data)
 
 // ── Payments ───────────────────────────────────────────────────────────────
 export const createPaymentIntent = (invoice_id) =>

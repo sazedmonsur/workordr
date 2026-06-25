@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { getInvoices, getInvoice, createPaymentIntent, confirmPayment } from '../api/client'
+import { getInvoices, getInvoice, createPaymentIntent, confirmPayment, markInvoicePaid } from '../api/client'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import StatusBadge from '../components/StatusBadge'
 
 // Use your publishable key from .env or hardcode test key for dev
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_placeholder')
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PK || '')
 
 function CheckoutForm({ invoiceId, total, onSuccess, onCancel }) {
   const stripe = useStripe()
@@ -66,6 +66,7 @@ export default function Invoices() {
   const [clientSecret, setClientSecret] = useState('')
   const [payError, setPayError] = useState('')
   const [loadingIntent, setLoadingIntent] = useState(false)
+  const [markingPaid, setMarkingPaid] = useState(false)
 
   const load = () => {
     getInvoices().then(setInvoices).finally(() => setLoading(false))
@@ -97,6 +98,20 @@ export default function Invoices() {
     load()
     setSelected(prev => ({ ...prev, status: 'paid' }))
     setClientSecret('')
+  }
+
+  const handleMarkPaid = async (method) => {
+    setMarkingPaid(true)
+    setPayError('')
+    try {
+      const updated = await markInvoicePaid(selected.id, method)
+      setSelected(updated)
+      load()
+    } catch (err) {
+      setPayError(err.response?.data?.detail || 'Failed to mark as paid')
+    } finally {
+      setMarkingPaid(false)
+    }
   }
 
   return (
@@ -190,13 +205,31 @@ export default function Invoices() {
               <>
                 {payError && <p className="text-sm text-red-600 mb-3">{payError}</p>}
                 {!clientSecret ? (
-                  <button
-                    onClick={handlePayClick}
-                    disabled={loadingIntent}
-                    className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white rounded-lg px-4 py-2 text-sm font-medium"
-                  >
-                    {loadingIntent ? 'Loading payment...' : 'Pay Now'}
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      onClick={handlePayClick}
+                      disabled={loadingIntent || markingPaid}
+                      className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white rounded-lg px-4 py-2 text-sm font-medium"
+                    >
+                      {loadingIntent ? 'Loading payment...' : 'Pay by Card (Online)'}
+                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleMarkPaid('cash')}
+                        disabled={markingPaid || loadingIntent}
+                        className="flex-1 border border-gray-200 hover:bg-gray-50 disabled:opacity-60 text-gray-700 rounded-lg px-3 py-2 text-sm font-medium"
+                      >
+                        {markingPaid ? 'Saving...' : 'Mark Paid — Cash'}
+                      </button>
+                      <button
+                        onClick={() => handleMarkPaid('e-transfer')}
+                        disabled={markingPaid || loadingIntent}
+                        className="flex-1 border border-gray-200 hover:bg-gray-50 disabled:opacity-60 text-gray-700 rounded-lg px-3 py-2 text-sm font-medium"
+                      >
+                        {markingPaid ? 'Saving...' : 'Mark Paid — Transfer'}
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <Elements stripe={stripePromise} options={{ clientSecret }}>
                     <CheckoutForm
