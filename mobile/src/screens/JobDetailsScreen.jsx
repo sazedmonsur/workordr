@@ -13,6 +13,8 @@ const STATUS_COLOR = {
 
 // What button to show for each current status
 const NEXT_ACTION = {
+  pending:     { label: 'Start Driving', nextStatus: 'en_route' },
+  requested:   { label: 'Start Driving', nextStatus: 'en_route' },
   assigned:    { label: 'Start Driving', nextStatus: 'en_route' },
   scheduled:   { label: 'Start Driving', nextStatus: 'en_route' },
   en_route:    { label: 'Arrived — Start Job', nextStatus: 'in_progress' },

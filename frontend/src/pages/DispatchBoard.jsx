@@ -25,8 +25,9 @@ function toLocalDate(d) {
 }
 
 // ── Job card ──────────────────────────────────────────────────────────────
-function JobCard({ job, index, onUnassign }) {
+function JobCard({ job, index, onUnassign, onSchedule }) {
   const color = STATUS_COLORS[job.status] || 'border-l-gray-300 bg-white'
+  const needsSchedule = onSchedule && ['pending', 'requested'].includes(job.status)
   return (
     <Draggable draggableId={job.id} index={index}>
       {(provided, snapshot) => (
@@ -55,14 +56,24 @@ function JobCard({ job, index, onUnassign }) {
           {job.address && (
             <p className="text-xs text-gray-400 truncate mt-0.5">{job.address}</p>
           )}
-          {onUnassign && job.technician_id && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onUnassign(job) }}
-              className="mt-1.5 text-xs text-red-400 hover:text-red-600"
-            >
-              Unassign
-            </button>
-          )}
+          <div className="flex gap-2 mt-1.5">
+            {needsSchedule && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onSchedule(job) }}
+                className="text-xs text-blue-500 hover:text-blue-700 font-medium"
+              >
+                + Schedule
+              </button>
+            )}
+            {onUnassign && job.technician_id && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onUnassign(job) }}
+                className="text-xs text-red-400 hover:text-red-600"
+              >
+                Unassign
+              </button>
+            )}
+          </div>
         </div>
       )}
     </Draggable>
@@ -70,7 +81,7 @@ function JobCard({ job, index, onUnassign }) {
 }
 
 // ── Tech column ───────────────────────────────────────────────────────────
-function TechColumn({ tech, jobs, onUnassign }) {
+function TechColumn({ tech, jobs, onUnassign, onSchedule }) {
   const activeCount = jobs.filter(j => ['assigned', 'en_route', 'in_progress'].includes(j.status)).length
   return (
     <div className="flex-shrink-0 w-64">
@@ -104,7 +115,8 @@ function TechColumn({ tech, jobs, onUnassign }) {
               <p className="text-xs text-gray-300 text-center pt-6">Drop job here</p>
             )}
             {jobs.map((job, i) => (
-              <JobCard key={job.id} job={job} index={i} onUnassign={onUnassign} />
+              <JobCard key={job.id} job={job} index={i} onUnassign={onUnassign}
+                onSchedule={onSchedule ? (job) => onSchedule(job, tech.id) : null} />
             ))}
             {provided.placeholder}
           </div>
@@ -189,6 +201,16 @@ export default function DispatchBoard() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleScheduleFromCard = (job, techId) => {
+    const datePrefix = date + 'T'
+    setScheduleForm({
+      scheduled_start: datePrefix + '09:00',
+      scheduled_end:   datePrefix + '10:00',
+    })
+    setSaveError('')
+    setModal({ jobId: job.id, destTechId: techId })
   }
 
   const handleUnassign = (job) => {
@@ -277,6 +299,7 @@ export default function DispatchBoard() {
                   tech={tech}
                   jobs={byTech(tech.id)}
                   onUnassign={handleUnassign}
+                  onSchedule={handleScheduleFromCard}
                 />
               ))
             )}
