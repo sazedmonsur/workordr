@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // Update to your machine's local IP when testing on a physical device
 // Android emulator: 10.0.2.2  |  iOS simulator: localhost  |  Physical device: your LAN IP
-const BASE_URL = 'http://10.0.0.63:8000'
+const BASE_URL = 'https://backend-production-21cd.up.railway.app'
 
 const api = axios.create({
   baseURL: BASE_URL,
