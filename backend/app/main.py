@@ -100,4 +100,4 @@ app.include_router(admin_demo.router)
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "app": "WorkOrdr", "version": "2.0.0"}
+    return {"status": "ok", "app": "WorkOrdr", "version": "2.0.1"}
