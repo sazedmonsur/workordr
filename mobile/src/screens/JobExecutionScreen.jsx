@@ -47,7 +47,7 @@ export default function JobExecutionScreen({ route, navigation }) {
             quality: 0.6,
             base64: true,
           })
-          if (!result.canceled && result.assets[0].base64) {
+          if (!result.canceled && result.assets?.[0]?.base64) {
             await uploadPhoto(result.assets[0])
           }
         },
@@ -60,7 +60,7 @@ export default function JobExecutionScreen({ route, navigation }) {
             quality: 0.6,
             base64: true,
           })
-          if (!result.canceled && result.assets[0].base64) {
+          if (!result.canceled && result.assets?.[0]?.base64) {
             await uploadPhoto(result.assets[0])
           }
         },

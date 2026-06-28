@@ -13,14 +13,14 @@ export default function LoginScreen({ navigation }) {
   useEffect(() => {
     if (!loading && user) navigation.replace('Tabs')
   }, [user, loading])
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState('')
+  const [email, setEmail]         = useState('')
+  const [password, setPassword]   = useState('')
+  const [loggingIn, setLoggingIn] = useState(false)
+  const [error, setError]         = useState('')
 
   const handleLogin = async () => {
     if (!email || !password) { setError('Enter your email and password'); return }
-    setError(''); setLoading(true)
+    setError(''); setLoggingIn(true)
     try {
       const data = await loginUser(email.toLowerCase().trim(), password)
       if (data.user.role !== 'technician') {
@@ -32,7 +32,7 @@ export default function LoginScreen({ navigation }) {
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid email or password')
     } finally {
-      setLoading(false)
+      setLoggingIn(false)
     }
   }
 
@@ -83,11 +83,11 @@ export default function LoginScreen({ navigation }) {
           </View>
 
           <TouchableOpacity
-            style={[s.btn, loading && s.btnDisabled]}
+            style={[s.btn, loggingIn && s.btnDisabled]}
             onPress={handleLogin}
-            disabled={loading}
+            disabled={loggingIn}
           >
-            {loading
+            {loggingIn
               ? <ActivityIndicator color="#fff" />
               : <Text style={s.btnText}>Sign In</Text>
             }
