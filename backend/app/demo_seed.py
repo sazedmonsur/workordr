@@ -244,9 +244,22 @@ def reset_and_seed(db: Session, company_id: uuid.UUID | None = None) -> dict:
     db.flush()
     db.add(InvoiceItem(invoice_id=inv2.id, description="Regular Cleaning — 2BR", quantity=1, unit_price=100.00, total=100.00))
 
-    # ── Technician user accounts (for mobile app login) ───────────────────────
+    # ── Admin user account (for web portal login) ─────────────────────────────
     if company_id:
         from app.auth import hash_password
+        # Create admin user for web portal
+        admin_user = User(
+            company_id=company_id,
+            email="demo@workordr.com",
+            password_hash=hash_password("workordr2024"),
+            role="admin",
+        )
+        existing_admin = db.query(User).filter(User.email == "demo@workordr.com").first()
+        if not existing_admin:
+            db.add(admin_user)
+
+    # ── Technician user accounts (for mobile app login) ───────────────────────
+    if company_id:
         tech_users = [
             User(
                 company_id=company_id,
