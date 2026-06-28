@@ -16,12 +16,28 @@ def reset_demo(payload: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Invalid key")
     # Look up (or create) the demo company
     from app.models import Company, User
+    from app.auth import hash_password
+
     demo_company = db.query(Company).filter(Company.name == "WorkOrdr Demo").first()
     if not demo_company:
         demo_company = Company(name="WorkOrdr Demo")
         db.add(demo_company)
         db.commit()
         db.refresh(demo_company)
+
     company_id = demo_company.id
     counts = reset_and_seed(db, company_id=company_id)
+
+    # ALWAYS create the demo admin user after seeding
+    existing = db.query(User).filter(User.email == "demo@workordr.com").first()
+    if not existing:
+        demo_user = User(
+            company_id=company_id,
+            email="demo@workordr.com",
+            password_hash=hash_password("workordr2024"),
+            role="admin",
+        )
+        db.add(demo_user)
+        db.commit()
+
     return {"message": "Demo data reset successfully", "seeded": counts}
