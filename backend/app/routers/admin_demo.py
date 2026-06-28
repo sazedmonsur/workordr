@@ -2,7 +2,8 @@ import os
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.database import get_db
+from sqlalchemy import text
+from app.database import get_db, engine
 from app.demo_seed import reset_and_seed
 from app.models import Company, User
 from app.auth import hash_password
@@ -60,3 +61,34 @@ def create_demo_user(payload: dict, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Demo user created", "email": "demo@workordr.com"}
+
+
+@router.post("/insert-demo-user-sql")
+def insert_demo_user_sql(payload: dict, db: Session = Depends(get_db)):
+    """Direct SQL insert - fallback when ORM fails. Protected by DEMO_PASSWORD env var."""
+    if DEMO_PASSWORD and payload.get("key") != DEMO_PASSWORD:
+        raise HTTPException(status_code=403, detail="Invalid key")
+
+    try:
+        company_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        password_hash = hash_password("workordr2024")
+
+        with engine.connect() as conn:
+            conn.execute(text("""
+                INSERT INTO companies (id, name, is_active)
+                VALUES (:cid, 'WorkOrdr Demo', true)
+                ON CONFLICT DO NOTHING
+            """), {"cid": company_id})
+
+            conn.execute(text("""
+                INSERT INTO users (id, company_id, email, password_hash, role, is_active)
+                VALUES (:uid, :cid, 'demo@workordr.com', :ph, 'admin', true)
+                ON CONFLICT (email) DO UPDATE SET password_hash = :ph
+            """), {"uid": user_id, "cid": company_id, "ph": password_hash})
+
+            conn.commit()
+
+        return {"message": "Demo user created via SQL", "email": "demo@workordr.com"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
