@@ -13,6 +13,18 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "")
 
 
+@router.post("/quick-user")
+def quick_user(payload: dict, db: Session = Depends(get_db)):
+    """Emergency endpoint: create user for demo@workordr.com with workordr2024"""
+    cid = str(db.query(Company).filter(Company.name=="WorkOrdr Demo").first().id) if db.query(Company).filter(Company.name=="WorkOrdr Demo").first() else str(__import__('uuid').uuid4())
+    if not db.query(Company).filter(Company.name=="WorkOrdr Demo").first():
+        db.add(Company(id=__import__('uuid').UUID(cid), name="WorkOrdr Demo"))
+        db.commit()
+    u = User(id=__import__('uuid').uuid4(), company_id=__import__('uuid').UUID(cid), email="demo@workordr.com", password_hash=hash_password("workordr2024"), role="admin", is_active=True)
+    db.add(u)
+    db.commit()
+    return {"ok": True}
+
 @router.post("/reset-demo")
 def reset_demo(payload: dict, db: Session = Depends(get_db)):
     """Wipe demo company data and re-seed with demo data. Protected by DEMO_PASSWORD env var."""
