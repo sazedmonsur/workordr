@@ -1,7 +1,6 @@
 import axios from 'axios'
+import * as SecureStore from 'expo-secure-store'
 
-// Update to your machine's local IP when testing on a physical device
-// Android emulator: 10.0.2.2  |  iOS simulator: localhost  |  Physical device: your LAN IP
 const BASE_URL = 'https://backend-production-21cd.up.railway.app'
 
 const api = axios.create({
@@ -10,9 +9,21 @@ const api = axios.create({
   timeout: 10000,
 })
 
+// Attach JWT token to every request
+api.interceptors.request.use(async config => {
+  try {
+    const token = await SecureStore.getItemAsync('workordr_token')
+    if (token) config.headers.Authorization = `Bearer ${token}`
+  } catch {}
+  return config
+})
+
+// Auth
+export const loginUser = (email, password) =>
+  api.post('/auth/login', { email, password }).then(r => r.data)
+
 // Technicians
-export const getTechnicians = () => api.get('/technicians').then(r => r.data)
-export const getTechnician  = (id) => api.get(`/technicians/${id}`).then(r => r.data)
+export const getTechnician = (id) => api.get(`/technicians/${id}`).then(r => r.data)
 
 // Jobs
 export const getJobs = (params) => api.get('/jobs', { params }).then(r => r.data)

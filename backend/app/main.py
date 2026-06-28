@@ -1,20 +1,99 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.database import engine, Base
+from sqlalchemy import text
+from app.database import engine, Base, get_db
 from app.routers import (
     customers, technicians, jobs, schedules,
     invoices, payments, dashboard,
     services, bookings, availability,
     analytics, notifications_log, admin_demo,
 )
+from app.routers import auth as auth_router
+from app.routers import superadmin as superadmin_router
 
-# Create all tables on startup (idempotent — safe to call each time)
-Base.metadata.create_all(bind=engine)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 1. Create new tables (idempotent)
+    Base.metadata.create_all(bind=engine)
+
+    # 2. Add company_id columns to existing tables via ALTER TABLE IF NOT EXISTS
+    migration_sqls = [
+        "ALTER TABLE customers ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
+        "ALTER TABLE technicians ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
+        "ALTER TABLE services ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
+    ]
+    with engine.connect() as conn:
+        for sql in migration_sqls:
+            try:
+                conn.execute(text(sql))
+            except Exception:
+                pass  # column may already exist with correct type
+        conn.commit()
+
+    # 3. Create demo company + admin user if they don't exist, then seed records
+    _bootstrap_demo()
+
+    yield
+
+
+def _bootstrap_demo():
+    """Create the demo company, admin user, and seed data on first boot."""
+    from app.models import Company, User, Customer, Technician, Service, Job
+    from app.auth import hash_password
+
+    db = next(get_db())
+    try:
+        # Check if demo company already exists
+        demo_company = db.query(Company).filter(Company.name == "WorkOrdr Demo").first()
+        if not demo_company:
+            demo_company = Company(name="WorkOrdr Demo")
+            db.add(demo_company)
+            db.flush()
+
+        # Create admin user if not present
+        demo_email = "demo@workordr.com"
+        demo_user = db.query(User).filter(User.email == demo_email).first()
+        if not demo_user:
+            db.add(User(
+                company_id=demo_company.id,
+                email=demo_email,
+                password_hash=hash_password("workordr2024"),
+                role="admin",
+            ))
+
+        db.commit()
+
+        # Assign all records with null company_id to the demo company
+        with engine.connect() as conn:
+            company_id_str = str(demo_company.id)
+            for table in ("customers", "technicians", "services", "jobs"):
+                conn.execute(
+                    text(f"UPDATE {table} SET company_id = :cid WHERE company_id IS NULL"),
+                    {"cid": company_id_str},
+                )
+            conn.commit()
+
+        # Seed demo data if the company has no data yet
+        job_count = db.query(Job).filter(Job.company_id == demo_company.id).count()
+        if job_count == 0:
+            from app.demo_seed import reset_and_seed
+            reset_and_seed(db, company_id=demo_company.id)
+
+    except Exception as e:
+        db.rollback()
+        print(f"[startup] Bootstrap warning: {e}")
+    finally:
+        db.close()
+
 
 app = FastAPI(
     title="WorkOrdr API",
     description="Field Service Management — Phase 2",
     version="2.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -24,6 +103,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Auth + multi-tenancy
+app.include_router(auth_router.router)
+app.include_router(superadmin_router.router)
 
 # Core
 app.include_router(customers.router)

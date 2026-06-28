@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models import Schedule, Job, Technician, JobStatusHistory
 from app.schemas import ScheduleCreate, ScheduleOut
 from app.notifications.events import notify
+from app.auth import get_current_user
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
 
@@ -20,14 +21,17 @@ def _load_schedule(db: Session, schedule_id: uuid.UUID) -> Schedule:
 
 
 @router.post("", response_model=ScheduleOut, status_code=201)
-def create_schedule(payload: ScheduleCreate, db: Session = Depends(get_db)):
+def create_schedule(payload: ScheduleCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     job = db.query(Job).options(
         joinedload(Job.customer), joinedload(Job.service)
-    ).filter(Job.id == payload.job_id).first()
+    ).filter(Job.id == payload.job_id, Job.company_id == user.company_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    tech = db.query(Technician).filter(Technician.id == payload.technician_id).first()
+    tech = db.query(Technician).filter(
+        Technician.id == payload.technician_id,
+        Technician.company_id == user.company_id,
+    ).first()
     if not tech:
         raise HTTPException(status_code=404, detail="Technician not found")
 
@@ -87,12 +91,13 @@ def list_schedules(
     date_filter: Optional[date] = Query(None, alias="date"),
     technician_id: Optional[uuid.UUID] = Query(None),
     db: Session = Depends(get_db),
+    user=Depends(get_current_user),
 ):
     q = db.query(Schedule).options(
         joinedload(Schedule.job).joinedload(Job.customer),
         joinedload(Schedule.job).joinedload(Job.service),
         joinedload(Schedule.technician),
-    )
+    ).join(Job, Schedule.job_id == Job.id).filter(Job.company_id == user.company_id)
     if date_filter:
         q = q.filter(
             Schedule.scheduled_start >= date_filter.isoformat(),

@@ -1,80 +1,124 @@
-import { useEffect, useState } from 'react'
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native'
-import { getTechnicians } from '../api/client'
+import { useState, useEffect } from 'react'
+import {
+  View, Text, TextInput, TouchableOpacity,
+  ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet,
+} from 'react-native'
+import { loginUser } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 export default function LoginScreen({ navigation }) {
-  const { setTechnician } = useAuth()
-  const [technicians, setTechnicians] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const { login, user, loading } = useAuth()
 
+  // If already authenticated, skip login screen
   useEffect(() => {
-    getTechnicians()
-      .then(setTechnicians)
-      .catch(() => setError('Could not connect to server. Check your BASE_URL in api/client.js'))
-      .finally(() => setLoading(false))
-  }, [])
+    if (!loading && user) navigation.replace('Tabs')
+  }, [user, loading])
+  const [email, setEmail]       = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState('')
 
-  const handleSelect = (tech) => {
-    setTechnician(tech)
-    navigation.replace('Tabs')
+  const handleLogin = async () => {
+    if (!email || !password) { setError('Enter your email and password'); return }
+    setError(''); setLoading(true)
+    try {
+      const data = await loginUser(email.toLowerCase().trim(), password)
+      if (data.user.role !== 'technician') {
+        setError('This app is for technicians. Use the web portal to manage your account.')
+        return
+      }
+      await login(data.token, data.user)
+      navigation.replace('Tabs')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Invalid email or password')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const skillColor = { junior: '#3b82f6', senior: '#8b5cf6', specialist: '#f59e0b' }
-
   return (
-    <View style={s.container}>
-      <View style={s.header}>
-        <Text style={s.logo}>Work<Text style={s.logoBlue}>Ordr</Text></Text>
-        <Text style={s.sub}>Select your profile to continue</Text>
-      </View>
+    <KeyboardAvoidingView
+      style={s.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <View style={s.inner}>
+        <View style={s.header}>
+          <Text style={s.logo}>Work<Text style={s.blue}>Ordr</Text></Text>
+          <Text style={s.sub}>Technician Sign In</Text>
+        </View>
 
-      {loading && <ActivityIndicator color="#3b82f6" size="large" />}
-      {!!error && <Text style={s.error}>{error}</Text>}
-
-      <FlatList
-        data={technicians}
-        keyExtractor={item => item.id}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={s.card} onPress={() => handleSelect(item)}>
-            <View style={[s.avatar, { backgroundColor: (skillColor[item.skill_level] || '#6b7280') + '22' }]}>
-              <Text style={[s.avatarText, { color: skillColor[item.skill_level] || '#6b7280' }]}>
-                {item.name.charAt(0)}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.name}>{item.name}</Text>
-              <Text style={s.detail}>{item.email}</Text>
-              <Text style={s.detail}>{item.skill_level} · {item.working_hours_start}–{item.working_hours_end}</Text>
-            </View>
-            <Text style={s.arrow}>›</Text>
-          </TouchableOpacity>
+        {!!error && (
+          <View style={s.errorBox}>
+            <Text style={s.errorText}>{error}</Text>
+          </View>
         )}
-        ListEmptyComponent={!loading && !error ? (
-          <Text style={s.empty}>No technicians found. Add technicians via the admin portal.</Text>
-        ) : null}
-      />
-    </View>
+
+        <View style={s.form}>
+          <View style={s.field}>
+            <Text style={s.label}>Email</Text>
+            <TextInput
+              style={s.input}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoCorrect={false}
+              placeholder="you@company.com"
+              placeholderTextColor="#9ca3af"
+              value={email}
+              onChangeText={setEmail}
+            />
+          </View>
+
+          <View style={s.field}>
+            <Text style={s.label}>Password</Text>
+            <TextInput
+              style={s.input}
+              secureTextEntry
+              placeholder="••••••••"
+              placeholderTextColor="#9ca3af"
+              value={password}
+              onChangeText={setPassword}
+              onSubmitEditing={handleLogin}
+              returnKeyType="go"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[s.btn, loading && s.btnDisabled]}
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            {loading
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={s.btnText}>Sign In</Text>
+            }
+          </TouchableOpacity>
+        </View>
+
+        <Text style={s.hint}>Ask your admin to create your login credentials.</Text>
+      </View>
+    </KeyboardAvoidingView>
   )
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  header:    { paddingHorizontal: 20, paddingTop: 60, paddingBottom: 24 },
-  logo:      { fontSize: 28, fontWeight: '800', color: '#111827' },
-  logoBlue:  { color: '#3b82f6' },
-  sub:       { fontSize: 14, color: '#9ca3af', marginTop: 4 },
-  card:      { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
-               borderRadius: 12, padding: 14, marginBottom: 10,
-               shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  avatar:    { width: 44, height: 44, borderRadius: 22, alignItems: 'center',
-               justifyContent: 'center', marginRight: 12 },
-  avatarText:{ fontSize: 18, fontWeight: '700' },
-  name:      { fontSize: 15, fontWeight: '600', color: '#111827' },
-  detail:    { fontSize: 12, color: '#9ca3af', marginTop: 1 },
-  arrow:     { fontSize: 22, color: '#d1d5db' },
-  error:     { color: '#ef4444', textAlign: 'center', marginHorizontal: 20, marginBottom: 12 },
-  empty:     { textAlign: 'center', color: '#9ca3af', marginTop: 40, paddingHorizontal: 20 },
+  container:   { flex: 1, backgroundColor: '#f9fafb' },
+  inner:       { flex: 1, justifyContent: 'center', paddingHorizontal: 24, paddingBottom: 40 },
+  header:      { alignItems: 'center', marginBottom: 36 },
+  logo:        { fontSize: 32, fontWeight: '800', color: '#111827' },
+  blue:        { color: '#3b82f6' },
+  sub:         { fontSize: 15, color: '#9ca3af', marginTop: 6 },
+  errorBox:    { backgroundColor: '#fef2f2', borderRadius: 10, padding: 14, marginBottom: 16 },
+  errorText:   { color: '#dc2626', fontSize: 13, textAlign: 'center' },
+  form:        { backgroundColor: '#fff', borderRadius: 16, padding: 20,
+                  shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 12, elevation: 3 },
+  field:       { marginBottom: 14 },
+  label:       { fontSize: 13, fontWeight: '500', color: '#374151', marginBottom: 6 },
+  input:       { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10,
+                  paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: '#111827',
+                  backgroundColor: '#fafafa' },
+  btn:         { backgroundColor: '#3b82f6', borderRadius: 10, paddingVertical: 14,
+                  alignItems: 'center', marginTop: 6 },
+  btnDisabled: { opacity: 0.6 },
+  btnText:     { color: '#fff', fontWeight: '700', fontSize: 16 },
+  hint:        { textAlign: 'center', color: '#9ca3af', fontSize: 12, marginTop: 24 },
 })

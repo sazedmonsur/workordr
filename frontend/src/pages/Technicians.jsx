@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
-import { getTechnicians, createTechnician, updateTechnician, getServices, assignServiceToTech, removeServiceFromTech } from '../api/client'
+import {
+  getTechnicians, createTechnician, updateTechnician,
+  getServices, assignServiceToTech, removeServiceFromTech,
+  createTechnicianLogin,
+} from '../api/client'
 
 const SKILL_LEVELS = ['junior', 'senior', 'specialist']
 
@@ -44,6 +48,13 @@ export default function Technicians() {
   const [saving, setSaving]           = useState(false)
   const [error, setError]             = useState('')
 
+  // Login modal state
+  const [loginModal, setLoginModal]   = useState(null) // tech object
+  const [loginForm, setLoginForm]     = useState({ email: '', password: '' })
+  const [loginSaving, setLoginSaving] = useState(false)
+  const [loginErr, setLoginErr]       = useState('')
+  const [loginSuccess, setLoginSuccess] = useState('')
+
   const [form, setForm] = useState({
     name: '', email: '', phone: '',
     skill_level: 'junior', base_rate: '', working_hours_start: '08:00', working_hours_end: '17:00',
@@ -87,16 +98,75 @@ export default function Technicians() {
       if (assigned) await removeServiceFromTech(techId, serviceId)
       else await assignServiceToTech(techId, serviceId)
       load()
-      // refresh selected
       const updated = technicians.find(t => t.id === techId)
       if (updated) setSelected(updated)
     } catch {}
+  }
+
+  const handleCreateLogin = async (e) => {
+    e.preventDefault()
+    setLoginSaving(true); setLoginErr(''); setLoginSuccess('')
+    try {
+      await createTechnicianLogin(loginModal.id, loginForm.email, loginForm.password)
+      setLoginSuccess(`Login created. ${loginForm.email} can now sign in on the mobile app.`)
+      setLoginForm({ email: '', password: '' })
+    } catch (err) {
+      setLoginErr(err.response?.data?.detail || 'Failed to create login')
+    } finally {
+      setLoginSaving(false)
+    }
   }
 
   const assignedIds = new Set((selected?.services || []).map(s => s.id))
 
   return (
     <div className="p-8">
+      {/* Login creation modal */}
+      {loginModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h2 className="font-semibold text-gray-900">Mobile Login for {loginModal.name}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Technician will use these to sign in to the app</p>
+              </div>
+              <button onClick={() => { setLoginModal(null); setLoginSuccess(''); setLoginErr('') }}
+                className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+            </div>
+
+            {loginSuccess && (
+              <div className="bg-green-50 text-green-700 text-sm rounded-lg px-4 py-3 mb-4">{loginSuccess}</div>
+            )}
+            {loginErr && (
+              <div className="bg-red-50 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">{loginErr}</div>
+            )}
+
+            {!loginSuccess && (
+              <form onSubmit={handleCreateLogin} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                  <input type="email" required placeholder="tech@company.com"
+                    value={loginForm.email}
+                    onChange={e => setLoginForm(f => ({ ...f, email: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Password</label>
+                  <input type="text" required minLength={6} placeholder="min 6 characters"
+                    value={loginForm.password}
+                    onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <button type="submit" disabled={loginSaving}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg px-4 py-2 text-sm font-medium">
+                  {loginSaving ? 'Creating…' : 'Create Login'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Technicians</h1>
         <button
@@ -124,7 +194,7 @@ export default function Technicians() {
           )}
         </div>
 
-        {/* Right panel: create or detail */}
+        {/* Right panel */}
         <div>
           {showCreate && (
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
@@ -217,6 +287,14 @@ export default function Technicians() {
                   })}
                 </div>
               </div>
+
+              {/* Mobile login button */}
+              <button
+                onClick={() => { setLoginModal(selected); setLoginErr(''); setLoginSuccess(''); setLoginForm({ email: selected.email || '', password: '' }) }}
+                className="w-full rounded-lg px-4 py-2 text-sm font-medium border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
+              >
+                Set Mobile App Login
+              </button>
 
               <button
                 onClick={() => handleToggleStatus(selected)}

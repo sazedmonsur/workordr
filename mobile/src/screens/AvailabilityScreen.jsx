@@ -18,7 +18,8 @@ function fmtDt(dt) {
 }
 
 export default function AvailabilityScreen() {
-  const { technician } = useAuth()
+  const { user, logout } = useAuth()
+  const technician_id = user?.technician_id
   const [slots, setSlots]       = useState([])
   const [loading, setLoading]   = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -33,14 +34,14 @@ export default function AvailabilityScreen() {
   })
 
   const load = () => {
-    if (!technician) return
+    if (!technician_id) return
     setLoading(true)
-    getTechAvailability(technician.id)
+    getTechAvailability(technician_id)
       .then(setSlots)
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { load() }, [technician])
+  useEffect(() => { load() }, [technician_id])
 
   const handleAdd = async () => {
     if (!form.start_time || !form.end_time) {
@@ -49,7 +50,7 @@ export default function AvailabilityScreen() {
     }
     setSaving(true)
     try {
-      await addAvailabilityBlock(technician.id, {
+      await addAvailabilityBlock(technician_id, {
         slot_type: form.slot_type,
         start_time: new Date(form.start_time).toISOString(),
         end_time: new Date(form.end_time).toISOString(),
@@ -85,11 +86,16 @@ export default function AvailabilityScreen() {
       <View style={s.header}>
         <View>
           <Text style={s.headerTitle}>My Availability</Text>
-          <Text style={s.headerSub}>{technician?.working_hours_start} – {technician?.working_hours_end} normal hours</Text>
+          <Text style={s.headerSub}>Block time off or unavailability</Text>
         </View>
-        <TouchableOpacity style={s.addBtn} onPress={() => setShowModal(true)}>
-          <Text style={s.addBtnText}>+ Block Time</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity style={s.addBtn} onPress={() => setShowModal(true)}>
+            <Text style={s.addBtnText}>+ Block</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.logoutBtn} onPress={logout}>
+            <Text style={s.logoutBtnText}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading ? (
@@ -228,6 +234,8 @@ const s = StyleSheet.create({
   typeOptionActive: { borderColor: '#3b82f6', backgroundColor: '#eff6ff' },
   typeOptionText:   { fontSize: 13, color: '#6b7280', fontWeight: '500' },
   typeOptionTextActive: { color: '#3b82f6', fontWeight: '700' },
-  saveBtn:    { backgroundColor: '#3b82f6', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 8 },
-  saveBtnText:{ color: '#fff', fontWeight: '700', fontSize: 15 },
+  saveBtn:     { backgroundColor: '#3b82f6', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 8 },
+  saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  logoutBtn:   { backgroundColor: '#fee2e2', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 },
+  logoutBtnText: { color: '#dc2626', fontSize: 12, fontWeight: '600' },
 })

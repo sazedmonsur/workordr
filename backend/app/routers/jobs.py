@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import Job, Technician, JobStatusHistory
 from app.schemas import JobCreate, JobUpdate, JobOut, JobStatusUpdate, JobStatusHistoryOut
+from app.auth import get_current_user
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -40,8 +41,8 @@ def _record_status_change(
 
 
 @router.post("", response_model=JobOut, status_code=201)
-def create_job(payload: JobCreate, db: Session = Depends(get_db)):
-    job = Job(**payload.model_dump())
+def create_job(payload: JobCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    job = Job(**payload.model_dump(), company_id=user.company_id)
     db.add(job)
     db.commit()
     db.refresh(job)
@@ -55,12 +56,13 @@ def list_jobs(
     customer_id: Optional[uuid.UUID] = Query(None),
     date: Optional[str] = Query(None, description="Filter by scheduled_at date YYYY-MM-DD"),
     db: Session = Depends(get_db),
+    user=Depends(get_current_user),
 ):
     q = db.query(Job).options(
         joinedload(Job.customer),
         joinedload(Job.technician),
         joinedload(Job.service),
-    )
+    ).filter(Job.company_id == user.company_id)
     if status:
         q = q.filter(Job.status == status)
     if technician_id:
@@ -75,13 +77,16 @@ def list_jobs(
 
 
 @router.get("/{job_id}", response_model=JobOut)
-def get_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
-    return _load_job(db, job_id)
+def get_job(job_id: uuid.UUID, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    job = _load_job(db, job_id)
+    if job.company_id != user.company_id:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
 
 
 @router.put("/{job_id}", response_model=JobOut)
-def update_job(job_id: uuid.UUID, payload: JobUpdate, db: Session = Depends(get_db)):
-    job = db.query(Job).filter(Job.id == job_id).first()
+def update_job(job_id: uuid.UUID, payload: JobUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    job = db.query(Job).filter(Job.id == job_id, Job.company_id == user.company_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     for field, value in payload.model_dump(exclude_none=True).items():
@@ -91,10 +96,10 @@ def update_job(job_id: uuid.UUID, payload: JobUpdate, db: Session = Depends(get_
 
 
 @router.patch("/{job_id}/status", response_model=JobOut)
-def update_job_status(job_id: uuid.UUID, payload: JobStatusUpdate, db: Session = Depends(get_db)):
+def update_job_status(job_id: uuid.UUID, payload: JobStatusUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
     if payload.status not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail=f"Invalid status. Valid: {sorted(VALID_STATUSES)}")
-    job = db.query(Job).filter(Job.id == job_id).first()
+    job = db.query(Job).filter(Job.id == job_id, Job.company_id == user.company_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     _record_status_change(db, job, payload.status, payload.changed_by or "admin", payload.notes)
@@ -106,8 +111,8 @@ def update_job_status(job_id: uuid.UUID, payload: JobStatusUpdate, db: Session =
 
 
 @router.get("/{job_id}/history", response_model=list[JobStatusHistoryOut])
-def get_job_history(job_id: uuid.UUID, db: Session = Depends(get_db)):
-    job = db.query(Job).filter(Job.id == job_id).first()
+def get_job_history(job_id: uuid.UUID, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    job = db.query(Job).filter(Job.id == job_id, Job.company_id == user.company_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return db.query(JobStatusHistory).filter(
@@ -122,8 +127,9 @@ def add_job_notes(
     job_id: uuid.UUID,
     payload: dict,
     db: Session = Depends(get_db),
+    user=Depends(get_current_user),
 ):
-    job = db.query(Job).filter(Job.id == job_id).first()
+    job = db.query(Job).filter(Job.id == job_id, Job.company_id == user.company_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     notes = payload.get("notes", "")
@@ -140,9 +146,10 @@ def complete_job(
     job_id: uuid.UUID,
     payload: dict,
     db: Session = Depends(get_db),
+    user=Depends(get_current_user),
 ):
     """Technician marks job complete with completion notes."""
-    job = db.query(Job).filter(Job.id == job_id).first()
+    job = db.query(Job).filter(Job.id == job_id, Job.company_id == user.company_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if job.status in ("completed", "invoiced", "paid", "cancelled"):
@@ -162,6 +169,7 @@ def complete_job(
 def dispatch_jobs(
     date: Optional[str] = Query(None, description="YYYY-MM-DD (defaults to today)"),
     db: Session = Depends(get_db),
+    user=Depends(get_current_user),
 ):
     """All jobs relevant to dispatch board for a given day."""
     from datetime import datetime, timedelta
@@ -177,6 +185,7 @@ def dispatch_jobs(
         joinedload(Job.service),
         joinedload(Job.schedule),
     ).filter(
+        Job.company_id == user.company_id,
         Job.status.notin_(["cancelled", "paid"]),
     )
     # Include: unscheduled (no scheduled_at) OR scheduled today

@@ -59,7 +59,8 @@ function JobCard({ job, onPress }) {
 }
 
 export default function JobListScreen({ navigation }) {
-  const { technician } = useAuth()
+  const { user } = useAuth()
+  const technician_id = user?.technician_id
   const [sections, setSections] = useState([])
   const [loading, setLoading]   = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -71,7 +72,7 @@ export default function JobListScreen({ navigation }) {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
     try {
-      const jobs = await getJobs({ technician_id: technician?.id })
+      const jobs = await getJobs({ technician_id })
       const active = jobs.filter(j => !['cancelled', 'paid'].includes(j.status))
 
       const today = new Date()
@@ -108,7 +109,7 @@ export default function JobListScreen({ navigation }) {
     } catch {}
     if (isRefresh) setRefreshing(false)
     else setLoading(false)
-  }, [technician, tab])
+  }, [technician_id, tab])
 
   useEffect(() => { load() }, [load])
 
