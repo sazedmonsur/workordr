@@ -11,6 +11,7 @@ from app.routers import (
 )
 from app.routers import auth as auth_router
 from app.routers import superadmin as superadmin_router
+from app.routers import quotes as quotes_router
 
 
 @asynccontextmanager
@@ -27,6 +28,9 @@ async def lifespan(app: FastAPI):
                 "ALTER TABLE technicians ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
                 "ALTER TABLE services ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
                 "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
+                "CREATE TABLE IF NOT EXISTS quotes (id UUID PRIMARY KEY, company_id UUID REFERENCES companies(id) NOT NULL, job_id UUID REFERENCES jobs(id) NOT NULL, technician_id UUID REFERENCES technicians(id), status VARCHAR(20) DEFAULT 'submitted', notes TEXT, subtotal NUMERIC(10,2) DEFAULT 0, total NUMERIC(10,2) DEFAULT 0, created_at TIMESTAMP DEFAULT NOW(), submitted_at TIMESTAMP)",
+                "CREATE TABLE IF NOT EXISTS quote_items (id UUID PRIMARY KEY, quote_id UUID REFERENCES quotes(id) NOT NULL, description VARCHAR(255) NOT NULL, quantity NUMERIC(10,2) DEFAULT 1, unit_price NUMERIC(10,2) DEFAULT 0, total NUMERIC(10,2) DEFAULT 0)",
+                "CREATE TABLE IF NOT EXISTS job_photos (id UUID PRIMARY KEY, company_id UUID REFERENCES companies(id) NOT NULL, job_id UUID REFERENCES jobs(id) NOT NULL, technician_id UUID REFERENCES technicians(id), caption VARCHAR(255), data TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW())",
             ]
             with engine.connect() as conn:
                 for sql in migration_sqls:
@@ -103,6 +107,7 @@ app.include_router(availability.router)
 app.include_router(analytics.router)
 app.include_router(notifications_log.router)
 app.include_router(admin_demo.router)
+app.include_router(quotes_router.router)
 
 
 @app.get("/health")

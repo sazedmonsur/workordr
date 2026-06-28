@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getServices, createService, updateService } from '../api/client'
 
-const CATEGORIES = ['HVAC', 'Appliance', 'Cleaning', 'Plumbing', 'Electrical', 'Other']
+const CATEGORIES = ['HVAC', 'Appliance', 'Cleaning', 'Plumbing', 'Electrical', 'General Contractor', 'Other']
 
 export default function Services() {
   const [services, setServices] = useState([])

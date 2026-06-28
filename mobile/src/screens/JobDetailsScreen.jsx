@@ -11,11 +11,8 @@ const STATUS_COLOR = {
   cancelled:   '#fee2e2', scheduled: '#dbeafe', pending: '#f3f4f6',
 }
 
-// What button to show for each current status
+// What button to show for each current status (assigned gets its own accept/reject UI)
 const NEXT_ACTION = {
-  pending:     { label: 'Start Driving', nextStatus: 'en_route' },
-  requested:   { label: 'Start Driving', nextStatus: 'en_route' },
-  assigned:    { label: 'Start Driving', nextStatus: 'en_route' },
   scheduled:   { label: 'Start Driving', nextStatus: 'en_route' },
   en_route:    { label: 'Arrived — Start Job', nextStatus: 'in_progress' },
   in_progress: { label: 'Continue Working', nextStatus: null, action: 'continue' },
@@ -71,9 +68,54 @@ export default function JobDetailsScreen({ route, navigation }) {
     ])
   }
 
-  const fmtDt = (dt) => dt ? new Date(dt).toLocaleString([], {
-    weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  }) : null
+  const handleAccept = () => {
+    Alert.alert('Accept Job', 'Accept this job assignment?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Accept',
+        onPress: async () => {
+          setActing(true)
+          try {
+            await updateJobStatus(jobId, 'scheduled')
+            load()
+          } catch {
+            Alert.alert('Error', 'Could not accept job')
+          } finally {
+            setActing(false)
+          }
+        },
+      },
+    ])
+  }
+
+  const handleReject = () => {
+    Alert.alert('Reject Job', 'Reject this job? It will return to the unassigned queue.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reject',
+        style: 'destructive',
+        onPress: async () => {
+          setActing(true)
+          try {
+            await updateJobStatus(jobId, 'pending')
+            navigation.goBack()
+          } catch {
+            Alert.alert('Error', 'Could not reject job')
+          } finally {
+            setActing(false)
+          }
+        },
+      },
+    ])
+  }
+
+  const fmtDt = (dt) => {
+    if (!dt) return null
+    const utc = dt.endsWith('Z') || dt.includes('+') ? dt : dt + 'Z'
+    return new Date(utc).toLocaleString([], {
+      weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    })
+  }
 
   if (loading) return (
     <View style={s.centered}><ActivityIndicator color="#3b82f6" size="large" /></View>
@@ -114,6 +156,29 @@ export default function JobDetailsScreen({ route, navigation }) {
 
       {/* Action buttons */}
       <View style={s.actions}>
+        {/* Accept / Reject — shown only when newly assigned */}
+        {job.status === 'assigned' && (
+          <View style={s.acceptRejectBox}>
+            <Text style={s.assignedLabel}>You have been assigned this job</Text>
+            <View style={s.acceptRejectRow}>
+              <TouchableOpacity
+                style={[s.acceptBtn, acting && s.btnDisabled]}
+                onPress={handleAccept}
+                disabled={acting}
+              >
+                <Text style={s.acceptBtnText}>{acting ? '...' : 'Accept'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.rejectBtn, acting && s.btnDisabled]}
+                onPress={handleReject}
+                disabled={acting}
+              >
+                <Text style={s.rejectBtnText}>{acting ? '...' : 'Reject'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {action && (
           <TouchableOpacity
             style={[s.primaryBtn, acting && s.btnDisabled]}
@@ -142,6 +207,20 @@ export default function JobDetailsScreen({ route, navigation }) {
             </Text>
           </View>
         )}
+
+        {/* Quote button — available any time a job is active */}
+        {!['completed', 'invoiced', 'paid', 'cancelled'].includes(job.status) && (
+          <TouchableOpacity
+            style={s.quoteBtn}
+            onPress={() => navigation.navigate('Quote', {
+              jobId: job.id,
+              jobTitle: job.title,
+              technicianId: job.technician_id,
+            })}
+          >
+            <Text style={s.quoteBtnText}>Create Quote</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </ScrollView>
   )
@@ -169,4 +248,13 @@ const s = StyleSheet.create({
   primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   doneBox:   { backgroundColor: '#dcfce7', borderRadius: 12, padding: 15, alignItems: 'center' },
   doneText:  { color: '#15803d', fontWeight: '700', fontSize: 15 },
+  acceptRejectBox: { backgroundColor: '#eff6ff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#bfdbfe' },
+  assignedLabel:   { fontSize: 13, color: '#1d4ed8', fontWeight: '600', textAlign: 'center', marginBottom: 12 },
+  acceptRejectRow: { flexDirection: 'row', gap: 10 },
+  acceptBtn:  { flex: 1, backgroundColor: '#16a34a', borderRadius: 10, padding: 14, alignItems: 'center' },
+  acceptBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  rejectBtn:  { flex: 1, backgroundColor: '#fff', borderRadius: 10, padding: 14, alignItems: 'center', borderWidth: 1.5, borderColor: '#ef4444' },
+  rejectBtnText: { color: '#ef4444', fontWeight: '700', fontSize: 15 },
+  quoteBtn:   { borderWidth: 1.5, borderColor: '#7c3aed', borderRadius: 12, padding: 14, alignItems: 'center' },
+  quoteBtnText: { color: '#7c3aed', fontWeight: '700', fontSize: 15 },
 })

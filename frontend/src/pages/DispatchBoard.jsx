@@ -17,7 +17,9 @@ const STATUS_COLORS = {
 
 function fmt(dt) {
   if (!dt) return '—'
-  return new Date(dt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  // API returns UTC without Z — append it so the browser converts to local time correctly
+  const utc = dt.endsWith('Z') || dt.includes('+') ? dt : dt + 'Z'
+  return new Date(utc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 function toLocalDate(d) {

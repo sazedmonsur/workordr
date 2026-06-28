@@ -8,6 +8,7 @@ import JobDetailsScreen     from '../screens/JobDetailsScreen'
 import JobExecutionScreen   from '../screens/JobExecutionScreen'
 import CompleteJobScreen    from '../screens/CompleteJobScreen'
 import AvailabilityScreen   from '../screens/AvailabilityScreen'
+import QuoteScreen          from '../screens/QuoteScreen'
 
 const Stack = createNativeStackNavigator()
 const Tab   = createBottomTabNavigator()
@@ -26,6 +27,7 @@ function JobsStack() {
       <Stack.Screen name="JobDetail"   component={JobDetailsScreen}   options={{ title: 'Job Details' }} />
       <Stack.Screen name="JobExecution" component={JobExecutionScreen} options={{ title: 'Job In Progress' }} />
       <Stack.Screen name="CompleteJob" component={CompleteJobScreen}  options={{ title: 'Complete Job' }} />
+      <Stack.Screen name="Quote"       component={QuoteScreen}        options={{ title: 'Create Quote' }} />
     </Stack.Navigator>
   )
 }

@@ -126,6 +126,7 @@ class Job(Base):
     service: Mapped["Service | None"] = relationship("Service", back_populates="jobs")
     schedule: Mapped["Schedule | None"] = relationship("Schedule", back_populates="job", uselist=False)
     invoice: Mapped["Invoice | None"] = relationship("Invoice", back_populates="job", uselist=False)
+    quotes: Mapped[list["Quote"]] = relationship("Quote", back_populates="job", cascade="all, delete-orphan")
     status_history: Mapped[list["JobStatusHistory"]] = relationship(
         "JobStatusHistory", back_populates="job", cascade="all, delete-orphan", order_by="JobStatusHistory.created_at"
     )
@@ -204,6 +205,49 @@ class NotificationLog(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, sent, failed
     payload: Mapped[str | None] = mapped_column(Text)  # JSON string
     error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class Quote(Base):
+    __tablename__ = "quotes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
+    job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("jobs.id"), nullable=False)
+    technician_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("technicians.id"))
+    status: Mapped[str] = mapped_column(String(20), default="submitted")  # submitted, approved, rejected
+    notes: Mapped[str | None] = mapped_column(Text)
+    subtotal: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
+    total: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    items: Mapped[list["QuoteItem"]] = relationship("QuoteItem", back_populates="quote", cascade="all, delete-orphan")
+    job: Mapped["Job"] = relationship("Job", back_populates="quotes")
+
+
+class QuoteItem(Base):
+    __tablename__ = "quote_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    quote_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("quotes.id"), nullable=False)
+    description: Mapped[str] = mapped_column(String(255), nullable=False)
+    quantity: Mapped[float] = mapped_column(Numeric(10, 2), default=1)
+    unit_price: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
+    total: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
+
+    quote: Mapped["Quote"] = relationship("Quote", back_populates="items")
+
+
+class JobPhoto(Base):
+    __tablename__ = "job_photos"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
+    job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("jobs.id"), nullable=False)
+    technician_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("technicians.id"))
+    caption: Mapped[str | None] = mapped_column(String(255))
+    data: Mapped[str] = mapped_column(Text, nullable=False)  # base64 encoded image
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

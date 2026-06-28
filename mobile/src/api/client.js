@@ -36,6 +36,14 @@ export const completeJob = (id, notes) => api.post(`/jobs/${id}/complete`, { not
 // Invoices
 export const createInvoice = (data) => api.post('/invoices', data).then(r => r.data)
 
+// Quotes
+export const createQuote    = (data) => api.post('/quotes', data).then(r => r.data)
+export const getJobQuotes   = (jobId) => api.get(`/quotes/job/${jobId}`).then(r => r.data)
+
+// Photos
+export const addJobPhoto    = (jobId, data) => api.post(`/jobs/${jobId}/photos`, data).then(r => r.data)
+export const getJobPhotos   = (jobId) => api.get(`/jobs/${jobId}/photos`).then(r => r.data)
+
 // Availability
 export const getTechAvailability     = (techId) => api.get(`/availability/${techId}`).then(r => r.data)
 export const addAvailabilityBlock    = (techId, data) => api.post(`/availability/${techId}`, data).then(r => r.data)

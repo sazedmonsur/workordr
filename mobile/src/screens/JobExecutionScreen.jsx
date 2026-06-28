@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
-  View, Text, StyleSheet, ScrollView, TextInput,
+  View, Text, StyleSheet, ScrollView, TextInput, Image,
   TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native'
-import { getJob, addJobNotes, completeJob } from '../api/client'
+import * as ImagePicker from 'expo-image-picker'
+import { getJob, addJobNotes, completeJob, addJobPhoto, getJobPhotos } from '../api/client'
 
 export default function JobExecutionScreen({ route, navigation }) {
   const { jobId } = route.params
@@ -14,13 +15,77 @@ export default function JobExecutionScreen({ route, navigation }) {
   const [completing, setCompleting] = useState(false)
   const [completionNotes, setCompletionNotes] = useState('')
   const [showCompleteForm, setShowCompleteForm] = useState(false)
+  const [photos, setPhotos]   = useState([])
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+
+  const loadPhotos = useCallback(() => {
+    getJobPhotos(jobId).then(setPhotos).catch(() => {})
+  }, [jobId])
 
   useEffect(() => {
     getJob(jobId).then(j => {
       setJob(j)
       setNotes(j.notes || '')
     }).finally(() => setLoading(false))
-  }, [jobId])
+    loadPhotos()
+  }, [jobId, loadPhotos])
+
+  const handleAddPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow photo library access to attach photos.')
+      return
+    }
+    Alert.alert('Add Photo', 'Choose source', [
+      {
+        text: 'Camera',
+        onPress: async () => {
+          const cam = await ImagePicker.requestCameraPermissionsAsync()
+          if (cam.status !== 'granted') return
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.6,
+            base64: true,
+          })
+          if (!result.canceled && result.assets[0].base64) {
+            await uploadPhoto(result.assets[0])
+          }
+        },
+      },
+      {
+        text: 'Photo Library',
+        onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.6,
+            base64: true,
+          })
+          if (!result.canceled && result.assets[0].base64) {
+            await uploadPhoto(result.assets[0])
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ])
+  }
+
+  const uploadPhoto = async (asset) => {
+    setUploadingPhoto(true)
+    try {
+      const ext = asset.uri.split('.').pop() || 'jpg'
+      await addJobPhoto(jobId, {
+        job_id: jobId,
+        technician_id: job?.technician_id || null,
+        caption: null,
+        data: `data:image/${ext};base64,${asset.base64}`,
+      })
+      loadPhotos()
+    } catch {
+      Alert.alert('Error', 'Failed to upload photo')
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
 
   const handleSaveNotes = async () => {
     if (!notes.trim()) return
@@ -94,13 +159,25 @@ export default function JobExecutionScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Photo placeholder */}
+        {/* Photos */}
         <View style={s.card}>
-          <Text style={s.sectionLabel}>Photos</Text>
-          <View style={s.photosPlaceholder}>
-            <Text style={s.photoIcon}>📷</Text>
-            <Text style={s.photoHint}>Photo uploads coming soon</Text>
-          </View>
+          <Text style={s.sectionLabel}>Photos ({photos.length})</Text>
+          {photos.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.photoStrip}>
+              {photos.map(p => (
+                <Image key={p.id} source={{ uri: p.data }} style={s.photoThumb} />
+              ))}
+            </ScrollView>
+          )}
+          <TouchableOpacity
+            style={[s.secondaryBtn, uploadingPhoto && s.btnDisabled]}
+            onPress={handleAddPhoto}
+            disabled={uploadingPhoto}
+          >
+            <Text style={s.secondaryBtnText}>
+              {uploadingPhoto ? 'Uploading...' : '📷  Add Photo'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Completion */}
@@ -160,8 +237,6 @@ const s = StyleSheet.create({
   btnDisabled:{ opacity: 0.6 },
   cancelLink: { alignItems: 'center', padding: 10 },
   cancelLinkText: { color: '#9ca3af', fontSize: 13 },
-  photosPlaceholder: { borderWidth: 1, borderColor: '#e5e7eb', borderStyle: 'dashed', borderRadius: 8,
-                       padding: 24, alignItems: 'center' },
-  photoIcon:  { fontSize: 32, marginBottom: 6 },
-  photoHint:  { color: '#9ca3af', fontSize: 12 },
+  photoStrip: { marginBottom: 10 },
+  photoThumb: { width: 80, height: 80, borderRadius: 8, marginRight: 8 },
 })

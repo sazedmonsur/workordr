@@ -289,6 +289,70 @@ class PaymentConfirm(BaseModel):
     invoice_id: uuid.UUID
 
 
+# ── Quotes ─────────────────────────────────────────────────────────────────
+
+class QuoteItemCreate(BaseModel):
+    description: str
+    quantity: float = 1.0
+    unit_price: float
+
+
+class QuoteItemOut(BaseModel):
+    id: uuid.UUID
+    description: str
+    quantity: float
+    unit_price: float
+    total: float
+
+    model_config = {"from_attributes": True}
+
+
+class QuoteCreate(BaseModel):
+    job_id: uuid.UUID
+    technician_id: Optional[uuid.UUID] = None
+    notes: Optional[str] = None
+    items: list[QuoteItemCreate]
+
+
+class QuoteOut(BaseModel):
+    id: uuid.UUID
+    job_id: uuid.UUID
+    technician_id: Optional[uuid.UUID]
+    status: str
+    notes: Optional[str]
+    subtotal: float
+    total: float
+    created_at: datetime
+    submitted_at: Optional[datetime]
+    items: list[QuoteItemOut] = []
+
+    model_config = {"from_attributes": True}
+
+
+class QuoteStatusUpdate(BaseModel):
+    status: str  # approved, rejected
+
+
+# ── Job Photos ──────────────────────────────────────────────────────────────
+
+class JobPhotoCreate(BaseModel):
+    job_id: uuid.UUID
+    technician_id: Optional[uuid.UUID] = None
+    caption: Optional[str] = None
+    data: str  # base64 encoded
+
+
+class JobPhotoOut(BaseModel):
+    id: uuid.UUID
+    job_id: uuid.UUID
+    technician_id: Optional[uuid.UUID]
+    caption: Optional[str]
+    data: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # ── Analytics ──────────────────────────────────────────────────────────────
 
 class DashboardStats(BaseModel):
