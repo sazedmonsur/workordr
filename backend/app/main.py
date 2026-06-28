@@ -78,8 +78,7 @@ app.add_middleware(
 
 # Auth + multi-tenancy
 app.include_router(auth_router.router)
-# TODO: fix superadmin endpoint - temporarily disabled
-# app.include_router(superadmin_router.router)
+app.include_router(superadmin_router.router)
 
 # Core
 app.include_router(customers.router)
