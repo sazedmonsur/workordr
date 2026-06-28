@@ -15,26 +15,32 @@ from app.routers import superadmin as superadmin_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Create new tables (idempotent)
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"[startup] create_all warning: {e}")
 
-    # 2. Add company_id columns to existing tables via ALTER TABLE IF NOT EXISTS
-    migration_sqls = [
-        "ALTER TABLE customers ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
-        "ALTER TABLE technicians ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
-        "ALTER TABLE services ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
-        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
-    ]
-    with engine.connect() as conn:
-        for sql in migration_sqls:
-            try:
-                conn.execute(text(sql))
-            except Exception:
-                pass  # column may already exist with correct type
-        conn.commit()
+    try:
+        migration_sqls = [
+            "ALTER TABLE customers ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
+            "ALTER TABLE technicians ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
+            "ALTER TABLE services ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
+            "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)",
+        ]
+        with engine.connect() as conn:
+            for sql in migration_sqls:
+                try:
+                    conn.execute(text(sql))
+                except Exception:
+                    pass
+            conn.commit()
+    except Exception as e:
+        print(f"[startup] migration warning: {e}")
 
-    # 3. Create demo company + admin user if they don't exist, then seed records
-    _bootstrap_demo()
+    try:
+        _bootstrap_demo()
+    except Exception as e:
+        print(f"[startup] bootstrap warning: {e}")
 
     yield
 
