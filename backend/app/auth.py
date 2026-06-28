@@ -15,11 +15,24 @@ bearer = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
-    return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
+    try:
+        return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
+    except Exception:
+        import hashlib, secrets, base64
+        salt = secrets.token_bytes(16)
+        key = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 260000)
+        return f"pbkdf2${base64.b64encode(salt).decode()}${base64.b64encode(key).decode()}"
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     try:
+        if hashed.startswith("pbkdf2$"):
+            import hashlib, base64
+            _, salt_b64, key_b64 = hashed.split("$")
+            salt = base64.b64decode(salt_b64)
+            expected = base64.b64decode(key_b64)
+            actual = hashlib.pbkdf2_hmac("sha256", plain.encode(), salt, 260000)
+            return actual == expected
         return _bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
     except Exception:
         return False
