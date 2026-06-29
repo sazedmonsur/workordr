@@ -3,8 +3,9 @@ from typing import Optional
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import and_, or_
 from app.database import get_db
-from app.models import Schedule, Job, Technician, JobStatusHistory
+from app.models import Schedule, Job, Technician, JobStatusHistory, AvailabilitySlot
 from app.schemas import ScheduleCreate, ScheduleOut
 from app.notifications.events import notify
 from app.auth import get_current_user
@@ -37,6 +38,19 @@ def create_schedule(payload: ScheduleCreate, db: Session = Depends(get_db), user
 
     if payload.scheduled_end <= payload.scheduled_start:
         raise HTTPException(status_code=400, detail="End time must be after start time")
+
+    # Check for availability slot conflicts (blocked or time off)
+    conflicts = db.query(AvailabilitySlot).filter(
+        AvailabilitySlot.technician_id == payload.technician_id,
+        or_(
+            and_(AvailabilitySlot.start_time < payload.scheduled_end, AvailabilitySlot.end_time > payload.scheduled_start)
+        ),
+    ).all()
+
+    warning = None
+    if conflicts:
+        conflict_times = ", ".join([f"{c.start_time} to {c.end_time}" for c in conflicts])
+        warning = f"Warning: Scheduling during blocked availability: {conflict_times}"
 
     existing = db.query(Schedule).filter(Schedule.job_id == payload.job_id).first()
     if existing:
@@ -83,7 +97,10 @@ def create_schedule(payload: ScheduleCreate, db: Session = Depends(get_db), user
             },
         )
 
-    return _load_schedule(db, schedule.id)
+    result = _load_schedule(db, schedule.id)
+    if warning:
+        result.warning = warning
+    return result
 
 
 @router.get("", response_model=list[ScheduleOut])

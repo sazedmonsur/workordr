@@ -165,6 +165,7 @@ export default function DispatchBoard() {
   const [scheduleForm, setScheduleForm] = useState({ scheduled_start: '', scheduled_end: '' })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [saveWarning, setSaveWarning] = useState('')
 
   const load = useCallback(() => {
     setLoading(true)
@@ -215,13 +216,17 @@ export default function DispatchBoard() {
     e.preventDefault()
     setSaving(true)
     setSaveError('')
+    setSaveWarning('')
     try {
-      await createSchedule({
+      const result = await createSchedule({
         job_id: modal.jobId,
         technician_id: modal.destTechId,
         scheduled_start: localToUTC(scheduleForm.scheduled_start),
         scheduled_end: localToUTC(scheduleForm.scheduled_end),
       })
+      if (result.warning) {
+        setSaveWarning(result.warning)
+      }
       setModal(null)
       load()
     } catch (err) {
@@ -347,6 +352,9 @@ export default function DispatchBoard() {
             )}
             {saveError && (
               <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded mb-3">{saveError}</p>
+            )}
+            {saveWarning && (
+              <p className="text-sm text-amber-700 bg-amber-50 px-3 py-2 rounded mb-3">{saveWarning}</p>
             )}
             <form onSubmit={handleScheduleSave} className="space-y-3 mt-3">
               <div>

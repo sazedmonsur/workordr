@@ -121,6 +121,15 @@ def get_job_history(job_id: uuid.UUID, db: Session = Depends(get_db), user=Depen
     ).order_by(JobStatusHistory.created_at).all()
 
 
+@router.delete("/{job_id}", status_code=204)
+def delete_job(job_id: uuid.UUID, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    job = db.query(Job).filter(Job.id == job_id, Job.company_id == user.company_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    db.delete(job)
+    db.commit()
+
+
 # ── Technician-facing ──────────────────────────────────────────────────────
 
 @router.post("/{job_id}/notes", response_model=JobOut)

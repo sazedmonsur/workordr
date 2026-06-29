@@ -125,7 +125,7 @@ export default function JobListScreen({ navigation }) {
       {/* Account header */}
       <View style={s.accountHeader}>
         <View>
-          <Text style={s.accountName}>{user?.email}</Text>
+          <Text style={s.accountName}>{user?.technician_name || user?.email}</Text>
         </View>
         <TouchableOpacity style={s.logoutBtn} onPress={handleLogout}>
           <Text style={s.logoutText}>Sign Out</Text>

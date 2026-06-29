@@ -176,6 +176,7 @@ class ScheduleOut(BaseModel):
     scheduled_start: datetime
     scheduled_end: datetime
     created_at: datetime
+    warning: Optional[str] = None
     job: Optional[JobOut] = None
     technician: Optional[TechnicianOut] = None
 

@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Alert, Modal, TextInput, Platform, ScrollView,
 } from 'react-native'
+import DatePicker from 'react-native-date-picker'
 import { getTechAvailability, addAvailabilityBlock, deleteAvailabilityBlock } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
@@ -28,10 +29,12 @@ export default function AvailabilityScreen() {
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1)
   const [form, setForm] = useState({
     slot_type: 'blocked',
-    start_time: tomorrow.toISOString().slice(0, 16),
-    end_time: '',
+    start_time: tomorrow,
+    end_time: new Date(tomorrow.getTime() + 3600000), // 1 hour later
     notes: '',
   })
+  const [showStartPicker, setShowStartPicker] = useState(false)
+  const [showEndPicker, setShowEndPicker] = useState(false)
 
   const load = () => {
     if (!technician_id) return
@@ -48,12 +51,16 @@ export default function AvailabilityScreen() {
       Alert.alert('Missing fields', 'Please fill in start and end time.')
       return
     }
+    if (form.end_time <= form.start_time) {
+      Alert.alert('Invalid', 'End time must be after start time.')
+      return
+    }
     setSaving(true)
     try {
       await addAvailabilityBlock(technician_id, {
         slot_type: form.slot_type,
-        start_time: new Date(form.start_time).toISOString(),
-        end_time: new Date(form.end_time).toISOString(),
+        start_time: form.start_time.toISOString(),
+        end_time: form.end_time.toISOString(),
         notes: form.notes || undefined,
       })
       setShowModal(false)
@@ -157,26 +164,49 @@ export default function AvailabilityScreen() {
 
           <View style={s.formGroup}>
             <Text style={s.formLabel}>Start Date & Time</Text>
-            <TextInput
-              value={form.start_time}
-              onChangeText={v => setForm(f => ({ ...f, start_time: v }))}
-              style={s.input}
-              placeholder="YYYY-MM-DDTHH:MM (e.g. 2026-04-15T09:00)"
-              autoCapitalize="none"
-            />
-            <Text style={s.hint}>Tip: Use format YYYY-MM-DDTHH:MM</Text>
+            <TouchableOpacity style={s.input} onPress={() => setShowStartPicker(true)}>
+              <Text style={s.pickerText}>
+                {form.start_time.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <View style={s.formGroup}>
             <Text style={s.formLabel}>End Date & Time</Text>
-            <TextInput
-              value={form.end_time}
-              onChangeText={v => setForm(f => ({ ...f, end_time: v }))}
-              style={s.input}
-              placeholder="YYYY-MM-DDTHH:MM (e.g. 2026-04-15T17:00)"
-              autoCapitalize="none"
-            />
+            <TouchableOpacity style={s.input} onPress={() => setShowEndPicker(true)}>
+              <Text style={s.pickerText}>
+                {form.end_time.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          <DatePicker
+            modal
+            open={showStartPicker}
+            date={form.start_time}
+            onConfirm={(date) => {
+              setForm(f => ({ ...f, start_time: date }))
+              setShowStartPicker(false)
+            }}
+            onCancel={() => setShowStartPicker(false)}
+            title="Select Start Time"
+            confirmText="Confirm"
+            cancelText="Cancel"
+          />
+
+          <DatePicker
+            modal
+            open={showEndPicker}
+            date={form.end_time}
+            onConfirm={(date) => {
+              setForm(f => ({ ...f, end_time: date }))
+              setShowEndPicker(false)
+            }}
+            onCancel={() => setShowEndPicker(false)}
+            title="Select End Time"
+            confirmText="Confirm"
+            cancelText="Cancel"
+          />
 
           <View style={s.formGroup}>
             <Text style={s.formLabel}>Notes (optional)</Text>
@@ -229,6 +259,7 @@ const s = StyleSheet.create({
   formLabel:  { fontSize: 12, fontWeight: '600', color: '#6b7280', marginBottom: 6 },
   input:      { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 10,
                 fontSize: 14, color: '#111827', backgroundColor: '#fff' },
+  pickerText: { color: '#111827', fontSize: 14 },
   hint:       { fontSize: 11, color: '#9ca3af', marginTop: 4 },
   typeRow:    { flexDirection: 'row', gap: 8 },
   typeOption: { flex: 1, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8,

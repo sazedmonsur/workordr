@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getJobs, createJob, updateJobStatus, getCustomers, getTechnicians, getServices } from '../api/client'
+import { getJobs, createJob, updateJobStatus, deleteJob, getCustomers, getTechnicians, getServices } from '../api/client'
 import StatusBadge from '../components/StatusBadge'
 
 const ALL_STATUSES = ['requested', 'pending', 'scheduled', 'assigned', 'en_route', 'in_progress', 'completed', 'invoiced', 'paid', 'cancelled']
@@ -63,6 +63,17 @@ export default function Jobs() {
       if (selected?.id === jobId) setSelected(prev => ({ ...prev, status: newStatus }))
     } catch (err) {
       alert(err.response?.data?.detail || 'Status update failed')
+    }
+  }
+
+  const handleDelete = async (jobId) => {
+    if (!window.confirm('Delete this job? This action cannot be undone.')) return
+    try {
+      await deleteJob(jobId)
+      setSelected(null)
+      load()
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Delete failed')
     }
   }
 
@@ -194,7 +205,7 @@ export default function Jobs() {
                 {selected.address && <p>Address: {selected.address}</p>}
                 {selected.notes && <p>Notes: {selected.notes}</p>}
               </div>
-              <div>
+              <div className="mb-3">
                 <label className="block text-xs font-medium text-gray-600 mb-1">Update Status</label>
                 <select
                   value={selected.status}
@@ -204,6 +215,12 @@ export default function Jobs() {
                   {ALL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
+              <button
+                onClick={() => handleDelete(selected.id)}
+                className="w-full border border-red-200 text-red-600 hover:bg-red-50 rounded-lg px-4 py-2 text-sm font-medium"
+              >
+                Delete Job
+              </button>
             </div>
           )}
         </div>

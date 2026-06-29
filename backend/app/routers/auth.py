@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User, Company
+from app.models import User, Company, Technician
 from app.auth import verify_password, create_token, get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -17,6 +17,7 @@ def login(payload: dict, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account disabled")
     company = db.query(Company).filter(Company.id == user.company_id).first() if user.company_id else None
+    technician = db.query(Technician).filter(Technician.id == user.technician_id).first() if user.technician_id else None
     token = create_token(
         str(user.id),
         str(user.company_id) if user.company_id else None,
@@ -31,6 +32,7 @@ def login(payload: dict, db: Session = Depends(get_db)):
             "role": user.role,
             "company_id": str(user.company_id) if user.company_id else None,
             "technician_id": str(user.technician_id) if user.technician_id else None,
+            "technician_name": technician.name if technician else None,
             "company_name": company.name if company else "WorkOrdr",
         }
     }
@@ -39,11 +41,13 @@ def login(payload: dict, db: Session = Depends(get_db)):
 @router.get("/me")
 def me(user=Depends(get_current_user), db: Session = Depends(get_db)):
     company = db.query(Company).filter(Company.id == user.company_id).first() if user.company_id else None
+    technician = db.query(Technician).filter(Technician.id == user.technician_id).first() if user.technician_id else None
     return {
         "id": str(user.id),
         "email": user.email,
         "role": user.role,
         "company_id": str(user.company_id) if user.company_id else None,
         "technician_id": str(user.technician_id) if user.technician_id else None,
+        "technician_name": technician.name if technician else None,
         "company_name": company.name if company else "WorkOrdr",
     }
