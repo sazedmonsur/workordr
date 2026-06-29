@@ -15,13 +15,16 @@ VALID_STATUSES = {
 }
 
 
-def _load_job(db: Session, job_id: uuid.UUID) -> Job:
-    job = db.query(Job).options(
+def _load_job(db: Session, job_id: uuid.UUID, company_id: uuid.UUID = None) -> Job:
+    q = db.query(Job).options(
         joinedload(Job.customer),
         joinedload(Job.technician),
         joinedload(Job.service),
         joinedload(Job.schedule),
-    ).filter(Job.id == job_id).first()
+    ).filter(Job.id == job_id)
+    if company_id:
+        q = q.filter(Job.company_id == company_id)
+    job = q.first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
@@ -46,7 +49,7 @@ def create_job(payload: JobCreate, db: Session = Depends(get_db), user=Depends(g
     db.add(job)
     db.commit()
     db.refresh(job)
-    return _load_job(db, job.id)
+    return _load_job(db, job.id, company_id=user.company_id)
 
 
 @router.get("", response_model=list[JobOut])
@@ -78,9 +81,7 @@ def list_jobs(
 
 @router.get("/{job_id}", response_model=JobOut)
 def get_job(job_id: uuid.UUID, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    job = _load_job(db, job_id)
-    if job.company_id != user.company_id:
-        raise HTTPException(status_code=404, detail="Job not found")
+    job = _load_job(db, job_id, company_id=user.company_id)
     return job
 
 
@@ -92,7 +93,7 @@ def update_job(job_id: uuid.UUID, payload: JobUpdate, db: Session = Depends(get_
     for field, value in payload.model_dump(exclude_none=True).items():
         setattr(job, field, value)
     db.commit()
-    return _load_job(db, job_id)
+    return _load_job(db, job_id, company_id=user.company_id)
 
 
 @router.patch("/{job_id}/status", response_model=JobOut)
@@ -107,7 +108,7 @@ def update_job_status(job_id: uuid.UUID, payload: JobStatusUpdate, db: Session =
     if payload.notes:
         job.notes = payload.notes
     db.commit()
-    return _load_job(db, job_id)
+    return _load_job(db, job_id, company_id=user.company_id)
 
 
 @router.get("/{job_id}/history", response_model=list[JobStatusHistoryOut])
@@ -138,7 +139,7 @@ def add_job_notes(
     else:
         job.notes = notes
     db.commit()
-    return _load_job(db, job_id)
+    return _load_job(db, job_id, company_id=user.company_id)
 
 
 @router.post("/{job_id}/complete", response_model=JobOut)
@@ -160,7 +161,7 @@ def complete_job(
     if completion_notes:
         job.notes = (job.notes + "\n" + completion_notes) if job.notes else completion_notes
     db.commit()
-    return _load_job(db, job_id)
+    return _load_job(db, job_id, company_id=user.company_id)
 
 
 # ── Dispatch board endpoint ────────────────────────────────────────────────
