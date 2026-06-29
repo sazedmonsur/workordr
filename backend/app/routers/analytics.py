@@ -25,13 +25,13 @@ def analytics_overview(db: Session = Depends(get_db), user=Depends(get_current_u
         Job.company_id == cid, Job.created_at >= week_start
     ).scalar() or 0
 
-    # Revenue today / this week (paid invoices only, scoped via job)
+    # Revenue today / this week (paid invoices from jobs completed today/this week)
     rev_today = db.query(func.sum(Invoice.total)).join(Job, Invoice.job_id == Job.id).filter(
-        Job.company_id == cid, Invoice.status == "paid", Invoice.updated_at >= today_start
+        Job.company_id == cid, Invoice.status == "paid", Job.updated_at >= today_start
     ).scalar() or 0.0
 
     rev_week = db.query(func.sum(Invoice.total)).join(Job, Invoice.job_id == Job.id).filter(
-        Job.company_id == cid, Invoice.status == "paid", Invoice.updated_at >= week_start
+        Job.company_id == cid, Invoice.status == "paid", Job.updated_at >= week_start
     ).scalar() or 0.0
 
     # Jobs by status (scoped to company)
@@ -59,11 +59,14 @@ def analytics_overview(db: Session = Depends(get_db), user=Depends(get_current_u
             Job.technician_id == tech.id,
             Job.status.in_(["assigned", "scheduled", "en_route", "in_progress"]),
         ).scalar() or 0
-        completed_week = db.query(func.count(Job.id)).filter(
+        # Count jobs with paid invoices (completed = has paid invoice)
+        completed_week = db.query(func.count(Job.id)).join(
+            Invoice, Invoice.job_id == Job.id
+        ).filter(
             Job.company_id == cid,
             Job.technician_id == tech.id,
-            Job.status == "completed",
-            Job.updated_at >= week_start,
+            Invoice.status == "paid",
+            Invoice.updated_at >= week_start,
         ).scalar() or 0
         tech_workload.append({
             "technician_id": str(tech.id),
