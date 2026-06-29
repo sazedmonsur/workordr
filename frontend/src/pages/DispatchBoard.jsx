@@ -23,7 +23,11 @@ function fmt(dt) {
 }
 
 function toLocalDate(d) {
-  return d.toISOString().split('T')[0]
+  // Return actual LOCAL date (not UTC), formatted as YYYY-MM-DD
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 // Convert local datetime string to UTC ISO string
@@ -195,11 +199,13 @@ export default function DispatchBoard() {
       return
     }
 
-    // Dropping on a tech column → open schedule modal
+    // Dropping on a tech column → open schedule modal with local times
     const datePrefix = date + 'T'
+    const localStart = datePrefix + '09:00'
+    const localEnd = datePrefix + '10:00'
     setScheduleForm({
-      scheduled_start: datePrefix + '09:00',
-      scheduled_end:   datePrefix + '10:00',
+      scheduled_start: localStart,
+      scheduled_end: localEnd,
     })
     setSaveError('')
     setModal({ jobId: draggableId, destTechId: destId })
