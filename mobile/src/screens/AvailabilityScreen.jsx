@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, Alert, Modal, TextInput, Platform,
+  ActivityIndicator, Alert, Modal, TextInput, Platform, ScrollView,
 } from 'react-native'
 import { getTechAvailability, addAvailabilityBlock, deleteAvailabilityBlock } from '../api/client'
 import { useAuth } from '../context/AuthContext'
@@ -156,23 +156,24 @@ export default function AvailabilityScreen() {
           </View>
 
           <View style={s.formGroup}>
-            <Text style={s.formLabel}>Start (YYYY-MM-DDTHH:MM)</Text>
+            <Text style={s.formLabel}>Start Date & Time</Text>
             <TextInput
               value={form.start_time}
               onChangeText={v => setForm(f => ({ ...f, start_time: v }))}
               style={s.input}
-              placeholder="2026-04-15T09:00"
+              placeholder="YYYY-MM-DDTHH:MM (e.g. 2026-04-15T09:00)"
               autoCapitalize="none"
             />
+            <Text style={s.hint}>Tip: Use format YYYY-MM-DDTHH:MM</Text>
           </View>
 
           <View style={s.formGroup}>
-            <Text style={s.formLabel}>End (YYYY-MM-DDTHH:MM)</Text>
+            <Text style={s.formLabel}>End Date & Time</Text>
             <TextInput
               value={form.end_time}
               onChangeText={v => setForm(f => ({ ...f, end_time: v }))}
               style={s.input}
-              placeholder="2026-04-15T17:00"
+              placeholder="YYYY-MM-DDTHH:MM (e.g. 2026-04-15T17:00)"
               autoCapitalize="none"
             />
           </View>
@@ -228,6 +229,7 @@ const s = StyleSheet.create({
   formLabel:  { fontSize: 12, fontWeight: '600', color: '#6b7280', marginBottom: 6 },
   input:      { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 10,
                 fontSize: 14, color: '#111827', backgroundColor: '#fff' },
+  hint:       { fontSize: 11, color: '#9ca3af', marginTop: 4 },
   typeRow:    { flexDirection: 'row', gap: 8 },
   typeOption: { flex: 1, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8,
                 padding: 10, alignItems: 'center', backgroundColor: '#fff' },

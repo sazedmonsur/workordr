@@ -59,12 +59,17 @@ function JobCard({ job, onPress }) {
 }
 
 export default function JobListScreen({ navigation }) {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const technician_id = user?.technician_id
   const [sections, setSections] = useState([])
   const [loading, setLoading]   = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [tab, setTab] = useState('today') // today | upcoming | all
+
+  const handleLogout = async () => {
+    await logout()
+    navigation.replace('Login')
+  }
 
   const ACTIVE_STATUSES = ['assigned', 'en_route', 'in_progress', 'scheduled', 'requested', 'pending']
 
@@ -117,6 +122,16 @@ export default function JobListScreen({ navigation }) {
 
   return (
     <View style={s.container}>
+      {/* Account header */}
+      <View style={s.accountHeader}>
+        <View>
+          <Text style={s.accountName}>{user?.email}</Text>
+        </View>
+        <TouchableOpacity style={s.logoutBtn} onPress={handleLogout}>
+          <Text style={s.logoutText}>Sign Out</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Tabs */}
       <View style={s.tabs}>
         {[['today', 'Today'], ['upcoming', 'Upcoming'], ['all', 'All']].map(([key, label]) => (
@@ -154,6 +169,12 @@ export default function JobListScreen({ navigation }) {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
+  accountHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                   backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 12,
+                   borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  accountName:   { fontSize: 13, fontWeight: '600', color: '#374151' },
+  logoutBtn:     { backgroundColor: '#fee2e2', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6 },
+  logoutText:    { color: '#dc2626', fontSize: 12, fontWeight: '600' },
   tabs:      { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   tab:       { flex: 1, paddingVertical: 12, alignItems: 'center' },
   tabActive: { borderBottomWidth: 2, borderBottomColor: '#3b82f6' },

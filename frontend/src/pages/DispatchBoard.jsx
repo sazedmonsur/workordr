@@ -26,6 +26,26 @@ function toLocalDate(d) {
   return d.toISOString().split('T')[0]
 }
 
+// Convert local datetime string to UTC ISO string
+function localToUTC(localDtStr) {
+  if (!localDtStr) return ''
+  const dt = new Date(localDtStr)
+  return dt.toISOString()
+}
+
+// Convert UTC ISO string to local datetime string for input
+function utcToLocalInput(utcStr) {
+  if (!utcStr) return ''
+  const utc = utcStr.endsWith('Z') || utcStr.includes('+') ? utcStr : utcStr + 'Z'
+  const dt = new Date(utc)
+  const year = dt.getFullYear()
+  const month = String(dt.getMonth() + 1).padStart(2, '0')
+  const day = String(dt.getDate()).padStart(2, '0')
+  const hours = String(dt.getHours()).padStart(2, '0')
+  const mins = String(dt.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${mins}`
+}
+
 // ── Job card ──────────────────────────────────────────────────────────────
 function JobCard({ job, index, onUnassign, onSchedule }) {
   const color = STATUS_COLORS[job.status] || 'border-l-gray-300 bg-white'
@@ -193,8 +213,8 @@ export default function DispatchBoard() {
       await createSchedule({
         job_id: modal.jobId,
         technician_id: modal.destTechId,
-        scheduled_start: new Date(scheduleForm.scheduled_start).toISOString(),
-        scheduled_end: new Date(scheduleForm.scheduled_end).toISOString(),
+        scheduled_start: localToUTC(scheduleForm.scheduled_start),
+        scheduled_end: localToUTC(scheduleForm.scheduled_end),
       })
       setModal(null)
       load()
